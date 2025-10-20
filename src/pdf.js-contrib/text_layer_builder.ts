@@ -126,7 +126,7 @@ var TextLayerBuilder = (function TextLayerBuilderClosure() {
           console.error('Could not find a matching mapping');
         }
 
-        var match = {
+        var match: any = {
           begin: {
             divIdx: i,
             offset: matchIdx - iIndex
@@ -174,13 +174,13 @@ var TextLayerBuilder = (function TextLayerBuilderClosure() {
         offset: undefined
       };
 
-      function beginText(begin, className) {
+      function beginText(begin, className?) {
         var divIdx = begin.divIdx;
         textDivs[divIdx].textContent = '';
         appendTextToDiv(divIdx, 0, begin.offset, className);
       }
 
-      function appendTextToDiv(divIdx, fromOffset, toOffset, className) {
+      function appendTextToDiv(divIdx, fromOffset, toOffset, className?) {
         var div = textDivs[divIdx];
         var content = bidiTexts[divIdx].str.substring(fromOffset, toOffset);
         var node = document.createTextNode(content);
@@ -198,33 +198,29 @@ var TextLayerBuilder = (function TextLayerBuilderClosure() {
       if (highlightAll) {
         i0 = 0;
         i1 = matches.length;
-      } else if (!isSelectedPage) {
-        // Not highlighting all and this isn't the selected page, so do nothing.
-        return;
       }
-
       for (var i = i0; i < i1; i++) {
         var match = matches[i];
         var begin = match.begin;
         var end = match.end;
-        var isSelected = (isSelectedPage && i === selectedMatchIdx);
+        var isSelected = (i === selectedMatchIdx);
         var highlightSuffix = (isSelected ? ' selected' : '');
-
-        if (this.findController) {
-          this.findController.updateMatchPosition(pageIdx, i, textDivs,
-                                                  begin.divIdx, end.divIdx);
+        if (isSelected) {
+          var highlight = document.createElement('span');
+          highlight.className = 'highlight selected';
         }
 
-        // Match inside new div.
-        if (!prevEnd || begin.divIdx !== prevEnd.divIdx) {
-          // If there was a previous div, then add the text at the end.
-          if (prevEnd !== null) {
-            appendTextToDiv(prevEnd.divIdx, prevEnd.offset, infinity.offset);
-          }
-          // Clear the divs and set the content until the starting point.
-          beginText(begin);
-        } else {
+        if (prevEnd !== null && begin.divIdx === prevEnd.divIdx) {
           appendTextToDiv(prevEnd.divIdx, prevEnd.offset, begin.offset);
+        } else {
+          if (prevEnd !== null) {
+            if (!isSelected && !highlightAll) {
+              beginText(begin);
+            } else {
+              appendTextToDiv(prevEnd.divIdx, prevEnd.offset, infinity.offset);
+            }
+          }
+          beginText(begin);
         }
 
         if (begin.divIdx === end.divIdx) {
@@ -347,6 +343,6 @@ DefaultTextLayerFactory.prototype = {
   }
 };
 
-module.exports = {
+export = {
   TextLayerBuilder: TextLayerBuilder
 };
