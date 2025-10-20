@@ -1,18 +1,22 @@
 // LICENSE : MIT
 
-import 'pdfjs-dist/build/pdf.combined.js';
-import 'pdfjs-dist/web/compatibility.js';
 import 'custom-event-polyfill';
 import domify from 'domify';
 
 import domMap from './dom-map';
-import { TextLayerBuilder } from './pdf.js-contrib/text_layer_builder';
+
+import * as pdfjsLib from 'pdfjs-dist';
+import { AnnotationLayerBuilder, EventBus, SimpleLinkService, TextLayerBuilder } from 'pdfjs-dist/web/pdf_viewer.mjs';
+import type { PDFDocumentProxy, PDFPageProxy, PageViewport as PDFPageViewport } from 'pdfjs-dist/types/src/pdf';
 
 interface PDFJSControllerOptions {
     container: HTMLElement;
     innerHTML?: string;
     pageNumber?: number;
     pdfjsDistDir?: string;
+    workerSrc?: string;
+    cMapUrl?: string;
+    cMapPacked?: boolean;
 }
 
 type ControllerDomMap = {
@@ -31,9 +35,6 @@ const defaultInnerHTML = `<div class="pdf-slide-progress">
 <div class="pdf-textLayer"></div>
 <div class="pdf-annotationLayer"></div>`;
 
-const pdfjsGlobal = global as typeof globalThis & { PDFJS?: PDFJSStatic };
-pdfjsGlobal.PDFJS = pdfjsGlobal.PDFJS ?? PDFJS;
-
 class PDFJSController {
     private readonly pdfContainer: HTMLElement;
     private pdfDoc: PDFDocumentProxy | null = null;
@@ -41,16 +42,29 @@ class PDFJSController {
     private promiseQueue: Promise<void> = Promise.resolve();
     private readonly domMapObject: ControllerDomMap;
     private readonly canvasContext: CanvasRenderingContext2D;
+    private readonly eventBus = new EventBus();
+    private readonly linkService = new SimpleLinkService({ eventBus: this.eventBus });
+    private readonly workerSrc?: string;
+    private readonly cMapUrl?: string;
+    private readonly cMapPacked?: boolean;
 
-    constructor({ container, innerHTML, pageNumber, pdfjsDistDir }: PDFJSControllerOptions) {
+    constructor({ container, innerHTML, pageNumber, pdfjsDistDir, workerSrc, cMapUrl, cMapPacked }: PDFJSControllerOptions) {
         this.pdfContainer = container;
         this.pageNum = pageNumber ?? 1;
 
-        if (pdfjsDistDir) {
-            const pdfjsDistDirWithoutSuffix = pdfjsDistDir.replace(/\/$/, '');
-            PDFJS.workerSrc = `${pdfjsDistDirWithoutSuffix}/build/pdf.worker.js`;
-            PDFJS.cMapUrl = `${pdfjsDistDirWithoutSuffix}/cmaps/`;
-            PDFJS.cMapPacked = true;
+        let resolvedWorkerSrc = workerSrc;
+        if (pdfjsDistDir && !resolvedWorkerSrc) {
+            const baseDir = pdfjsDistDir.replace(/\/$/, '');
+            resolvedWorkerSrc = `${baseDir}/build/pdf.worker.mjs`;
+            this.cMapUrl = `${baseDir}/cmaps/`;
+            this.cMapPacked = true;
+        } else {
+            this.cMapUrl = cMapUrl;
+            this.cMapPacked = cMapPacked;
+        }
+        this.workerSrc = resolvedWorkerSrc;
+        if (resolvedWorkerSrc) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = resolvedWorkerSrc;
         }
 
         const html = innerHTML ?? defaultInnerHTML;
@@ -66,7 +80,9 @@ class PDFJSController {
         this.domMapObject = domMap<typeof mapping, ControllerDomMap>(dom, mapping);
         container.appendChild(dom);
 
-        const canvasContext = this.domMapObject.canvas.getContext('2d');
+        const canvasContext = this.domMapObject.canvas.getContext('2d', {
+            willReadFrequently: true
+        });
         if (!canvasContext) {
             throw new Error('Unable to obtain a 2D canvas context.');
         }
@@ -91,7 +107,14 @@ class PDFJSController {
         this.pdfContainer.addEventListener(events.before_pdf_rendering, hideLoadingIcon);
 
         try {
-            this.pdfDoc = await PDFJS.getDocument(url);
+            const source: { url: string; cMapUrl?: string; cMapPacked?: boolean } = { url };
+            if (this.cMapUrl) {
+                source.cMapUrl = this.cMapUrl;
+                source.cMapPacked = this.cMapPacked ?? true;
+            }
+            const loadingTask = pdfjsLib.getDocument(source);
+            this.pdfDoc = await loadingTask.promise;
+            this.linkService.setDocument?.(this.pdfDoc);
             await this.queueRenderPage(this.pageNum);
         } finally {
             this.pdfContainer.removeEventListener(events.before_pdf_rendering, hideLoadingIcon);
@@ -137,14 +160,8 @@ class PDFJSController {
     }
 
     private cleanup(): void {
-        const { textLayer, annotationLayer } = this.domMapObject;
-        const range = document.createRange();
-
-        range.selectNodeContents(textLayer);
-        range.deleteContents();
-
-        range.selectNodeContents(annotationLayer);
-        range.deleteContents();
+        this.domMapObject.textLayer.replaceChildren();
+        this.domMapObject.annotationLayer.replaceChildren();
     }
 
     private async renderPage(pageNumber: number): Promise<void> {
@@ -161,29 +178,33 @@ class PDFJSController {
             this.cleanup();
 
             const { canvas, textLayer, annotationLayer } = this.domMapObject;
-            const viewport = page.getViewport(canvas.width / page.getViewport(1).width);
-            canvas.height = viewport.height;
+            const initialViewport = page.getViewport({ scale: 1 });
+            const desiredWidth = this.domMapObject.canvas.width || canvas.clientWidth || initialViewport.width;
+            const scale = desiredWidth / initialViewport.width;
+            const viewport = page.getViewport({ scale });
             canvas.width = viewport.width;
-            textLayer.style.width = canvas.style.width;
-            textLayer.style.height = canvas.style.height;
+            canvas.height = viewport.height;
+            textLayer.style.width = `${viewport.width}px`;
+            textLayer.style.height = `${viewport.height}px`;
 
-            const renderContext = {
+            const renderTask = page.render({
                 canvasContext: this.canvasContext,
-                viewport
-            };
-
-            const renderPromise = page.render(renderContext).promise;
-            const textLayerPromise = page.getTextContent().then((textContent) => {
-                const textLayerBuilder = new TextLayerBuilder({
-                    textLayerDiv: textLayer,
-                    viewport,
-                    pageIndex: pageNumber - 1
-                });
-                textLayerBuilder.setTextContent(textContent);
-                textLayerBuilder.render();
+                viewport,
+                canvas
             });
 
-            await Promise.all([renderPromise, textLayerPromise]);
+            const textLayerBuilder = new TextLayerBuilder({
+                pdfPage: page,
+                onAppend: (div: HTMLDivElement) => {
+                    textLayer.replaceChildren(div);
+                }
+            });
+
+            await Promise.all([
+                renderTask.promise,
+                textLayerBuilder.render({ viewport })
+            ]);
+
             await this.setupAnnotations(page, viewport, annotationLayer);
         } finally {
             const afterEvent = new CustomEvent(events.after_pdf_rendering, { detail: this });
@@ -205,35 +226,20 @@ class PDFJSController {
     }
 
     private async setupAnnotations(page: PDFPageProxy, viewport: PDFPageViewport, annotationArea: HTMLDivElement): Promise<void> {
-        const annotationsData = await page.getAnnotations();
-        const clonedViewport = viewport.clone({ dontFlip: true });
+        const annotationLayerBuilder = new AnnotationLayerBuilder({
+            pdfPage: page,
+            linkService: this.linkService,
+            renderForms: false,
+            imageResourcesPath: '',
+            onAppend: (div: HTMLDivElement) => {
+                annotationArea.replaceChildren(div);
+            }
+        });
 
-        for (const data of annotationsData) {
-            if (!data || !data.hasHtml) {
-                continue;
-            }
-            const element = PDFJS.AnnotationUtils.getHtmlElement(data) as HTMLElement;
-            let rect = data.rect as number[];
-            const view = page.view;
-            rect = PDFJS.Util.normalizeRect([
-                rect[0],
-                view[3] - rect[1] + view[1],
-                rect[2],
-                view[3] - rect[3] + view[1]
-            ]);
-            element.style.left = `${rect[0]}px`;
-            element.style.top = `${rect[1]}px`;
-            element.style.position = 'absolute';
-            const transform = clonedViewport.transform;
-            const transformStr = `matrix(${transform.join(',')})`;
-            PDFJS.CustomStyle.setProp('transform', element, transformStr);
-            const transformOriginStr = `${-rect[0]}px ${-rect[1]}px`;
-            PDFJS.CustomStyle.setProp('transformOrigin', element, transformOriginStr);
-            if (data.subtype === 'Link' && !data.url) {
-                continue;
-            }
-            annotationArea.appendChild(element);
-        }
+        await annotationLayerBuilder.render({
+            viewport: viewport.clone({ dontFlip: true }),
+            intent: 'display'
+        });
     }
 }
 
