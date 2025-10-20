@@ -1,6 +1,6 @@
 // LICENSE : MIT
 
-import PDFController from 'pdf.js-controller';
+import PDFController from '@zonuexe/pdf.js-controller';
 
 const container = document.getElementById('pdf-container');
 if (!container) {

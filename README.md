@@ -22,55 +22,70 @@ Dependencies
 
 ### Create Presentation Viewer
 
+The ESM bundle exported by `@zonuexe/pdf.js-controller` expects the host to provide `pdfjs-dist` (and the viewer helpers) via an import map. The demo under `example/presentation` defines the following tags:
+
+```html
+<script type="importmap">
+{
+  "imports": {
+    "@zonuexe/pdf.js-controller": "./vendor/pdfjs-controller.js",
+    "pdfjs-dist": "./node_modules/pdfjs-dist/build/pdf.mjs",
+    "pdfjs-dist/web/pdf_viewer.mjs": "./node_modules/pdfjs-dist/web/pdf_viewer.mjs"
+  }
+}
+</script>
+<script type="module" src="./build.js" defer></script>
+```
+
+Place `pdf.worker.mjs` and the `cmaps/` directory alongside the module bundle (e.g. `./pdf.worker.mjs`, `./cmaps/`) and pass those URLs through `workerSrc` / `cMapUrl`.
+
 See [example/presentation](example/presentation)
 
 ```js
-// container element
-var container = document.getElementById("pdf-container");
+import PDFController from '@zonuexe/pdf.js-controller';
 
-var PDFController = require("pdf.js-controller");
-var controller = new PDFController({
-    container: container,
-    // path to dir of pdfjs-dist
-    pdfjsDistDir: __dirname + "/node_modules/pdfjs-dist/"
-});
-// path to URL of pdf.
-// Apply CORS to this path. It means that the URL should be same origin.
-var PDFURL = "./example.pdf";
-controller.loadDocument(PDFURL)
-    .then(initializedEvent)
-    .catch(function (error) {
-    console.error(error);
+const container = document.getElementById('pdf-container');
+if (!container) throw new Error('Missing #pdf-container');
+
+const controller = new PDFController({
+  container,
+  workerSrc: new URL('./pdf.worker.mjs', import.meta.url).toString(),
+  cMapUrl: new URL('./cmaps/', import.meta.url).toString(),
+  cMapPacked: true
 });
 
-container.addEventListener(PDFController.Events.before_pdf_rendering, function (event) {
-    // before render
-});
-container.addEventListener(PDFController.Events.after_pdf_rendering, function (event) {
-     // after render
-});
+const pdfUrl = new URL('./example.pdf', import.meta.url).toString();
 
-function initializedEvent() {
-    window.addEventListener("resize", function (event) {
-        controller.fitItSize();
+controller.loadDocument(pdfUrl)
+  .then(() => {
+    container.addEventListener(PDFController.Events.before_pdf_rendering, () => {
+      // before render
     });
-    document.onkeydown = function (event) {
-        var kc = event.keyCode;
-        if (event.shiftKey || event.ctrlKey || event.metaKey) {
-            return;
-        }
-        if (kc === 37 || kc === 40 || kc === 75 || kc === 65) {
-            // left, down, K, A
-            event.preventDefault();
-            controller.prevPage();
-        } else if (kc === 38 || kc === 39 || kc === 74 || kc === 83) {
-            // up, right, J, S
-            event.preventDefault();
-            controller.nextPage();
-        }
+    container.addEventListener(PDFController.Events.after_pdf_rendering, () => {
+      // after render
+    });
 
-    };
-}
+    window.addEventListener('resize', () => {
+      void controller.fitItSize();
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.shiftKey || event.ctrlKey || event.metaKey) {
+        return;
+      }
+      const kc = event.keyCode;
+      if (kc === 37 || kc === 40 || kc === 75 || kc === 65) {
+        event.preventDefault();
+        void controller.prevPage();
+      } else if (kc === 38 || kc === 39 || kc === 74 || kc === 83) {
+        event.preventDefault();
+        void controller.nextPage();
+      }
+    });
+  })
+  .catch((error) => {
+    console.error(error);
+  });
 ```
 
 ## Contributing

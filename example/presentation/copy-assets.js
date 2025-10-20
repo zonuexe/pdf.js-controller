@@ -21,3 +21,14 @@ if (fs.existsSync(cmapsTarget)) {
   fs.rmSync(cmapsTarget, { recursive: true, force: true });
 }
 fs.cpSync(cmapsSource, cmapsTarget, { recursive: true });
+
+const controllerSource = require.resolve('@zonuexe/pdf.js-controller/build/PDFJSController.js');
+const controllerDir = path.resolve(__dirname, 'vendor');
+const controllerTarget = path.join(controllerDir, 'pdfjs-controller.js');
+fs.mkdirSync(controllerDir, { recursive: true });
+fs.copyFileSync(controllerSource, controllerTarget);
+
+const controllerMapSource = `${controllerSource}.map`;
+if (fs.existsSync(controllerMapSource)) {
+  fs.copyFileSync(controllerMapSource, `${controllerTarget}.map`);
+}

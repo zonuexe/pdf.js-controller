@@ -6,7 +6,7 @@
   "main": "example.js",
   "scripts": {
     "start": "npm run build && static-server",
-    "build": "esbuild example.js --bundle --format=esm --platform=browser --outfile=build.js && node copy-assets.js"
+    "build": "esbuild example.js --bundle --format=esm --platform=browser --external:@zonuexe/pdf.js-controller --external:pdfjs-dist --external:pdfjs-dist/* --outfile=build.js && node copy-assets.js"
   },
   "author": "azu",
   "license": "MIT",
@@ -15,6 +15,7 @@
     "static-server": "^2.0.2"
   },
   "dependencies": {
-    "pdf.js-controller": "../../"
+    "@zonuexe/pdf.js-controller": "../../",
+    "pdfjs-dist": "^5.4.296"
   }
 }

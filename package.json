@@ -28,7 +28,7 @@
   },
   "scripts": {
     "build": "npm run compile && npm run bundle",
-    "bundle": "esbuild lib/PDFJSController.js --bundle --format=iife --global-name=PDFJSController --outfile=build/PDFJSController.js",
+    "bundle": "esbuild src/browser-entry.ts --bundle --format=esm --platform=browser --external:pdfjs-dist --external:pdfjs-dist/* --outfile=build/PDFJSController.js",
     "compile": "tsc -p tsconfig.json",
     "watch": "tsc -w -p tsconfig.json",
     "prepublish": "npm run --if-present build"

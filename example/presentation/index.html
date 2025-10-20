@@ -55,6 +55,15 @@
     <div id="js-prev" class="arrow prev"></div>
     <div id="js-next" class="arrow next"></div>
 </div>
-<script type="module" src="./build.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "@zonuexe/pdf.js-controller": "./vendor/pdfjs-controller.js",
+    "pdfjs-dist": "./node_modules/pdfjs-dist/build/pdf.mjs",
+    "pdfjs-dist/web/pdf_viewer.mjs": "./node_modules/pdfjs-dist/web/pdf_viewer.mjs"
+  }
+}
+</script>
+<script type="module" src="./build.js" defer></script>
 </body>
 </html>
