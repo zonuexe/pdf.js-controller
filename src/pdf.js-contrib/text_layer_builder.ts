@@ -14,356 +14,300 @@
  */
 /* globals PDFJS */
 
-'use strict';
-
-/**
- * @typedef {Object} TextLayerBuilderOptions
- * @property {HTMLDivElement} textLayerDiv - The text layer container.
- * @property {number} pageIndex - The page index.
- * @property {PageViewport} viewport - The viewport of the text layer.
- * @property {PDFFindController} findController
- */
-
-/**
- * TextLayerBuilder provides text-selection functionality for the PDF.
- * It does this by creating overlay divs over the PDF text. These divs
- * contain text that matches the PDF text they are overlaying. This object
- * also provides a way to highlight text that is being searched for.
- * @class
- */
 type TextLayerBuilderOptions = {
-  textLayerDiv: HTMLDivElement;
-  pageIndex: number;
-  viewport: PDFPageViewport;
-  findController?: any;
+    textLayerDiv: HTMLDivElement;
+    pageIndex: number;
+    viewport: PDFPageViewport;
+    findController?: any;
 };
 
 type TextMatchPosition = {
-  divIdx: number;
-  offset: number;
+    divIdx: number;
+    offset: number;
 };
 
 type TextMatch = {
-  begin: TextMatchPosition;
-  end: TextMatchPosition;
+    begin: TextMatchPosition;
+    end: TextMatchPosition;
 };
 
-var TextLayerBuilder = (function TextLayerBuilderClosure() {
-  function TextLayerBuilder(options: TextLayerBuilderOptions) {
-    this.textLayerDiv = options.textLayerDiv;
-    this.renderingDone = false;
-    this.divContentDone = false;
-    this.pageIdx = options.pageIndex;
-    this.pageNumber = this.pageIdx + 1;
-    this.matches = [] as TextMatch[];
-    this.viewport = options.viewport;
-    this.textDivs = [] as HTMLElement[];
-    this.findController = options.findController || null;
-    this.textLayerRenderTask = null as PDFRenderTask | null;
-    this._bindMouse();
-  }
+class TextLayerBuilder {
+    private readonly textLayerDiv: HTMLDivElement;
+    private readonly pageIdx: number;
+    private readonly pageNumber: number;
+    private readonly viewport: PDFPageViewport;
+    private readonly findController: any;
 
-  TextLayerBuilder.prototype = {
-    _finishRendering: function TextLayerBuilder_finishRendering() {
-      this.renderingDone = true;
+    private renderingDone = false;
+    private divContentDone = false;
+    private matches: TextMatch[] = [];
+    private textDivs: HTMLElement[] = [];
+    private textLayerRenderTask: PDFRenderTask | null = null;
+    private textContent: any = null;
 
-      var endOfContent = document.createElement('div');
-      endOfContent.className = 'endOfContent';
-      this.textLayerDiv.appendChild(endOfContent);
+    constructor(options: TextLayerBuilderOptions) {
+        this.textLayerDiv = options.textLayerDiv;
+        this.pageIdx = options.pageIndex;
+        this.pageNumber = this.pageIdx + 1;
+        this.viewport = options.viewport;
+        this.findController = options.findController || null;
 
-      var event = document.createEvent('CustomEvent');
-      event.initCustomEvent('textlayerrendered', true, true, {
-        pageNumber: this.pageNumber
-      });
-      this.textLayerDiv.dispatchEvent(event);
-    },
+        this.bindMouse();
+    }
 
-    /**
-     * Renders the text layer.
-     * @param {number} timeout (optional) if specified, the rendering waits
-     *   for specified amount of ms.
-     */
-    render: function TextLayerBuilder_render(timeout?: number) {
-      if (!this.divContentDone || this.renderingDone) {
-        return;
-      }
-
-      if (this.textLayerRenderTask) {
-        this.textLayerRenderTask.cancel();
-        this.textLayerRenderTask = null;
-      }
-
-      this.textDivs = [];
-      var textLayerFrag = document.createDocumentFragment();
-      this.textLayerRenderTask = PDFJS.renderTextLayer({
-        textContent: this.textContent,
-        container: textLayerFrag,
-        viewport: this.viewport,
-        textDivs: this.textDivs,
-        timeout: timeout
-      });
-      this.textLayerRenderTask.promise.then(function () {
-        this.textLayerDiv.appendChild(textLayerFrag);
-        this._finishRendering();
-        this.updateMatches();
-      }.bind(this), function (reason) {
-        // canceled or failed to render text layer -- skipping errors
-      });
-    },
-
-    setTextContent: function TextLayerBuilder_setTextContent(textContent: any) {
-      if (this.textLayerRenderTask) {
-        this.textLayerRenderTask.cancel();
-        this.textLayerRenderTask = null;
-      }
-      this.textContent = textContent;
-      this.divContentDone = true;
-    },
-
-    convertMatches: function TextLayerBuilder_convertMatches(matches: number[]) {
-      var i = 0;
-      var iIndex = 0;
-      var bidiTexts = this.textContent.items;
-      var end = bidiTexts.length - 1;
-      var queryLen = (this.findController === null ?
-                      0 : this.findController.state.query.length);
-      var ret: TextMatch[] = [];
-
-      for (var m = 0, len = matches.length; m < len; m++) {
-        // Calculate the start position.
-        var matchIdx = matches[m];
-
-        // Loop over the divIdxs.
-        while (i !== end && matchIdx >= (iIndex + bidiTexts[i].str.length)) {
-          iIndex += bidiTexts[i].str.length;
-          i++;
+    render(timeout?: number): void {
+        if (!this.divContentDone || this.renderingDone) {
+            return;
         }
 
-        if (i === bidiTexts.length) {
-          console.error('Could not find a matching mapping');
+        if (this.textLayerRenderTask) {
+            this.textLayerRenderTask.cancel();
+            this.textLayerRenderTask = null;
         }
 
-        var match: TextMatch = {
-          begin: {
-            divIdx: i,
-            offset: matchIdx - iIndex
-          },
-          end: {
-            divIdx: i,
-            offset: 0
-          }
-        };
+        this.textDivs = [];
+        const textLayerFrag = document.createDocumentFragment();
+        this.textLayerRenderTask = PDFJS.renderTextLayer({
+            textContent: this.textContent,
+            container: textLayerFrag,
+            viewport: this.viewport,
+            textDivs: this.textDivs,
+            timeout
+        });
+        this.textLayerRenderTask.promise.then(() => {
+            this.textLayerDiv.appendChild(textLayerFrag);
+            this.finishRendering();
+            this.updateMatches();
+        }).catch(() => {
+            // canceled or failed to render text layer -- skipping errors
+        });
+    }
 
-        // Calculate the end position.
-        matchIdx += queryLen;
+    setTextContent(textContent: any): void {
+        if (this.textLayerRenderTask) {
+            this.textLayerRenderTask.cancel();
+            this.textLayerRenderTask = null;
+        }
+        this.textContent = textContent;
+        this.divContentDone = true;
+    }
 
-        // Somewhat the same array as above, but use > instead of >= to get
-        // the end position right.
-        while (i !== end && matchIdx > (iIndex + bidiTexts[i].str.length)) {
-          iIndex += bidiTexts[i].str.length;
-          i++;
+    updateMatches(): void {
+        if (!this.renderingDone || !this.textContent) {
+            return;
         }
 
-        match.end = {
-          divIdx: i,
-          offset: matchIdx - iIndex
-        };
-        ret.push(match);
-      }
+        const matches = this.matches;
+        const textDivs = this.textDivs;
+        const bidiTexts = this.textContent.items;
+        let clearedUntilDivIdx = -1;
 
-      return ret;
-    },
-
-    renderMatches: function TextLayerBuilder_renderMatches(matches: TextMatch[]) {
-      // Early exit if there is nothing to render.
-      if (matches.length === 0) {
-        return;
-      }
-
-      var bidiTexts = this.textContent.items;
-      var textDivs = this.textDivs;
-      var prevEnd = null;
-      var pageIdx = this.pageIdx;
-      var isSelectedPage = (this.findController === null ?
-        false : (pageIdx === this.findController.selected.pageIdx));
-      var selectedMatchIdx = (this.findController === null ?
-                              -1 : this.findController.selected.matchIdx);
-      var highlightAll = (this.findController === null ?
-                          false : this.findController.state.highlightAll);
-      var infinity = {
-        divIdx: -1,
-        offset: undefined
-      };
-
-      function beginText(begin, className?) {
-        var divIdx = begin.divIdx;
-        textDivs[divIdx].textContent = '';
-        appendTextToDiv(divIdx, 0, begin.offset, className);
-      }
-
-      function appendTextToDiv(divIdx, fromOffset, toOffset, className?) {
-        var div = textDivs[divIdx];
-        var content = bidiTexts[divIdx].str.substring(fromOffset, toOffset);
-        var node = document.createTextNode(content);
-        if (className) {
-          var span = document.createElement('span');
-          span.className = className;
-          span.appendChild(node);
-          div.appendChild(span);
-          return;
-        }
-        div.appendChild(node);
-      }
-
-      var i0 = selectedMatchIdx, i1 = i0 + 1;
-      if (highlightAll) {
-        i0 = 0;
-        i1 = matches.length;
-      }
-      for (var i = i0; i < i1; i++) {
-        var match = matches[i];
-        var begin = match.begin;
-        var end = match.end;
-        var isSelected = (i === selectedMatchIdx);
-        var highlightSuffix = (isSelected ? ' selected' : '');
-        if (isSelected) {
-          var highlight = document.createElement('span');
-          highlight.className = 'highlight selected';
-        }
-
-        if (prevEnd !== null && begin.divIdx === prevEnd.divIdx) {
-          appendTextToDiv(prevEnd.divIdx, prevEnd.offset, begin.offset);
-        } else {
-          if (prevEnd !== null) {
-            if (!isSelected && !highlightAll) {
-              beginText(begin);
-            } else {
-              appendTextToDiv(prevEnd.divIdx, prevEnd.offset, infinity.offset);
+        for (let i = 0, len = matches.length; i < len; i += 1) {
+            const match = matches[i];
+            const begin = Math.max(clearedUntilDivIdx, match.begin.divIdx);
+            for (let n = begin, end = match.end.divIdx; n <= end; n += 1) {
+                const div = textDivs[n];
+                div.textContent = bidiTexts[n].str;
+                div.className = '';
             }
-          }
-          beginText(begin);
+            clearedUntilDivIdx = match.end.divIdx + 1;
         }
 
-        if (begin.divIdx === end.divIdx) {
-          appendTextToDiv(begin.divIdx, begin.offset, end.offset,
-                          'highlight' + highlightSuffix);
-        } else {
-          appendTextToDiv(begin.divIdx, begin.offset, infinity.offset,
-                          'highlight begin' + highlightSuffix);
-          for (var n0 = begin.divIdx + 1, n1 = end.divIdx; n0 < n1; n0++) {
-            textDivs[n0].className = 'highlight middle' + highlightSuffix;
-          }
-          beginText(end, 'highlight end' + highlightSuffix);
+        if (this.findController === null || !this.findController.active) {
+            return;
         }
-        prevEnd = end;
-      }
 
-      if (prevEnd) {
-        appendTextToDiv(prevEnd.divIdx, prevEnd.offset, infinity.offset);
-      }
-    },
+        this.matches = this.convertMatches(this.findController.pageMatches[this.pageIdx] || []);
+        this.renderMatches(this.matches);
+    }
 
-    updateMatches: function TextLayerBuilder_updateMatches() {
-      // Only show matches when all rendering is done.
-      if (!this.renderingDone) {
-        return;
-      }
+    private finishRendering(): void {
+        this.renderingDone = true;
 
-      // Clear all matches.
-      var matches = this.matches;
-      var textDivs = this.textDivs;
-      var bidiTexts = this.textContent.items;
-      var clearedUntilDivIdx = -1;
+        const endOfContent = document.createElement('div');
+        endOfContent.className = 'endOfContent';
+        this.textLayerDiv.appendChild(endOfContent);
 
-      // Clear all current matches.
-      for (var i = 0, len = matches.length; i < len; i++) {
-        var match = matches[i];
-        var begin = Math.max(clearedUntilDivIdx, match.begin.divIdx);
-        for (var n = begin, end = match.end.divIdx; n <= end; n++) {
-          var div = textDivs[n];
-          div.textContent = bidiTexts[n].str;
-          div.className = '';
+        const event = document.createEvent('CustomEvent');
+        event.initCustomEvent('textlayerrendered', true, true, {
+            pageNumber: this.pageNumber
+        });
+        this.textLayerDiv.dispatchEvent(event);
+    }
+
+    private convertMatches(matches: number[]): TextMatch[] {
+        if (!this.textContent) {
+            return [];
         }
-        clearedUntilDivIdx = match.end.divIdx + 1;
-      }
 
-      if (this.findController === null || !this.findController.active) {
-        return;
-      }
+        let i = 0;
+        let iIndex = 0;
+        const bidiTexts: Array<{ str: string }> = this.textContent.items;
+        const end = bidiTexts.length - 1;
+        const queryLen = this.findController === null ? 0 : this.findController.state.query.length;
+        const ret: TextMatch[] = [];
 
-      // Convert the matches on the page controller into the match format
-      // used for the textLayer.
-      this.matches = this.convertMatches(this.findController === null ?
-        [] : (this.findController.pageMatches[this.pageIdx] || []));
-      this.renderMatches(this.matches);
-    },
+        for (let m = 0, len = matches.length; m < len; m += 1) {
+            let matchIdx = matches[m];
 
-    /**
-     * Fixes text selection: adds additional div where mouse was clicked.
-     * This reduces flickering of the content if mouse slowly dragged down/up.
-     * @private
-     */
-    _bindMouse: function TextLayerBuilder_bindMouse() {
-      var div = this.textLayerDiv;
-      div.addEventListener('mousedown', function (e) {
-        var end = div.querySelector('.endOfContent');
-        if (!end) {
-          return;
+            while (i !== end && matchIdx >= (iIndex + bidiTexts[i].str.length)) {
+                iIndex += bidiTexts[i].str.length;
+                i += 1;
+            }
+
+            if (i === bidiTexts.length) {
+                console.error('Could not find a matching mapping');
+            }
+
+            const match: TextMatch = {
+                begin: {
+                    divIdx: i,
+                    offset: matchIdx - iIndex
+                },
+                end: {
+                    divIdx: i,
+                    offset: 0
+                }
+            };
+
+            matchIdx += queryLen;
+
+            while (i !== end && matchIdx > (iIndex + bidiTexts[i].str.length)) {
+                iIndex += bidiTexts[i].str.length;
+                i += 1;
+            }
+
+            match.end = {
+                divIdx: i,
+                offset: matchIdx - iIndex
+            };
+            ret.push(match);
         }
+
+        return ret;
+    }
+
+    private renderMatches(matches: TextMatch[]): void {
+        if (matches.length === 0 || !this.textContent) {
+            return;
+        }
+
+        const bidiTexts: Array<{ str: string }> = this.textContent.items;
+        const textDivs = this.textDivs;
+        let prevEnd: TextMatchPosition | null = null;
+        const pageIdx = this.pageIdx;
+        const isSelectedPage = this.findController === null ? false : (pageIdx === this.findController.selected.pageIdx);
+        const selectedMatchIdx = this.findController === null ? -1 : this.findController.selected.matchIdx;
+        const highlightAll = this.findController === null ? false : this.findController.state.highlightAll;
+        const infinity = {
+            divIdx: -1,
+            offset: undefined as number | undefined
+        };
+
+        const beginText = (begin: TextMatchPosition, className?: string): void => {
+            const divIdx = begin.divIdx;
+            textDivs[divIdx].textContent = '';
+            appendTextToDiv(divIdx, 0, begin.offset, className);
+        };
+
+        const appendTextToDiv = (divIdx: number, fromOffset: number, toOffset: number | undefined, className?: string): void => {
+            const div = textDivs[divIdx];
+            const content = bidiTexts[divIdx].str.substring(fromOffset, toOffset);
+            const node = document.createTextNode(content);
+            if (className) {
+                const span = document.createElement('span');
+                span.className = className;
+                span.appendChild(node);
+                div.appendChild(span);
+                return;
+            }
+            div.appendChild(node);
+        };
+
+        let i0 = selectedMatchIdx;
+        let i1 = i0 + 1;
+        if (highlightAll) {
+            i0 = 0;
+            i1 = matches.length;
+        }
+        for (let i = i0; i < i1; i += 1) {
+            const match = matches[i];
+            const begin = match.begin;
+            const end = match.end;
+            const isSelected = i === selectedMatchIdx;
+            const highlightSuffix = isSelected ? ' selected' : '';
+
+            if (prevEnd !== null && begin.divIdx === prevEnd.divIdx) {
+                appendTextToDiv(prevEnd.divIdx, prevEnd.offset, begin.offset);
+            } else {
+                if (prevEnd !== null) {
+                    if (!isSelected && !highlightAll) {
+                        beginText(begin);
+                    } else {
+                        appendTextToDiv(prevEnd.divIdx, prevEnd.offset, infinity.offset);
+                    }
+                }
+                beginText(begin);
+            }
+
+            if (begin.divIdx === end.divIdx) {
+                appendTextToDiv(begin.divIdx, begin.offset, end.offset, `highlight${highlightSuffix}`);
+            } else {
+                appendTextToDiv(begin.divIdx, begin.offset, infinity.offset, `highlight begin${highlightSuffix}`);
+                for (let n0 = begin.divIdx + 1, n1 = end.divIdx; n0 < n1; n0 += 1) {
+                    textDivs[n0].className = `highlight middle${highlightSuffix}`;
+                }
+                beginText(end, `highlight end${highlightSuffix}`);
+            }
+            prevEnd = end;
+        }
+
+        if (prevEnd) {
+            appendTextToDiv(prevEnd.divIdx, prevEnd.offset, infinity.offset);
+        }
+    }
+
+    private bindMouse(): void {
+        const div = this.textLayerDiv;
+        div.addEventListener('mousedown', (event) => {
+            const end = div.querySelector('.endOfContent') as HTMLElement | null;
+            if (!end) {
+                return;
+            }
 //#if !(MOZCENTRAL || FIREFOX)
-        // On non-Firefox browsers, the selection will feel better if the height
-        // of the endOfContent div will be adjusted to start at mouse click
-        // location -- this will avoid flickering when selections moves up.
-        // However it does not work when selection started on empty space.
-        var adjustTop = e.target !== div;
+            let adjustTop = event.target !== div;
 //#if GENERIC
-        adjustTop = adjustTop && window.getComputedStyle(end).
-          getPropertyValue('-moz-user-select') !== 'none';
+            adjustTop = adjustTop && window.getComputedStyle(end).getPropertyValue('-moz-user-select') !== 'none';
 //#endif
-        if (adjustTop) {
-          var divBounds = div.getBoundingClientRect();
-          var r = Math.max(0, (e.pageY - divBounds.top) / divBounds.height);
-          end.style.top = (r * 100).toFixed(2) + '%';
-        }
+            if (adjustTop) {
+                const divBounds = div.getBoundingClientRect();
+                const ratio = Math.max(0, (event.pageY - divBounds.top) / divBounds.height);
+                end.style.top = `${(ratio * 100).toFixed(2)}%`;
+            }
 //#endif
-        end.classList.add('active');
-      });
-      div.addEventListener('mouseup', function (e) {
-        var end = div.querySelector('.endOfContent');
-        if (!end) {
-          return;
-        }
+            end.classList.add('active');
+        });
+        div.addEventListener('mouseup', () => {
+            const end = div.querySelector('.endOfContent') as HTMLElement | null;
+            if (!end) {
+                return;
+            }
 //#if !(MOZCENTRAL || FIREFOX)
-        end.style.top = '';
+            end.style.top = '';
 //#endif
-        end.classList.remove('active');
-      });
-    },
-  };
-  return TextLayerBuilder;
-})();
+            end.classList.remove('active');
+        });
+    }
+}
 
-/**
- * @constructor
- * @implements IPDFTextLayerFactory
- */
-function DefaultTextLayerFactory() {}
-DefaultTextLayerFactory.prototype = {
-  /**
-   * @param {HTMLDivElement} textLayerDiv
-   * @param {number} pageIndex
-   * @param {PageViewport} viewport
-   * @returns {TextLayerBuilder}
-   */
-  createTextLayerBuilder: function (textLayerDiv, pageIndex, viewport) {
-    return new TextLayerBuilder({
-      textLayerDiv: textLayerDiv,
-      pageIndex: pageIndex,
-      viewport: viewport
-    });
-  }
-};
+class DefaultTextLayerFactory {
+    createTextLayerBuilder(textLayerDiv: HTMLDivElement, pageIndex: number, viewport: PDFPageViewport): TextLayerBuilder {
+        return new TextLayerBuilder({
+            textLayerDiv,
+            pageIndex,
+            viewport
+        });
+    }
+}
 
-export = {
-  TextLayerBuilder: TextLayerBuilder
-};
+export { TextLayerBuilder, DefaultTextLayerFactory };

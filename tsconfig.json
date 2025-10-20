@@ -6,8 +6,11 @@
     "sourceMap": true,
     "outDir": "lib",
     "rootDir": "src",
-    "skipLibCheck": true,
-    "strict": false,
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": false,
+    "strict": true,
     "lib": [
       "dom",
       "es2015"
