@@ -5,7 +5,7 @@ import domify from 'domify';
 
 import domMap from './dom-map';
 
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import * as pdfjsLib from 'pdfjs-dist';
 import { AnnotationLayerBuilder, EventBus, SimpleLinkService, TextLayerBuilder } from 'pdfjs-dist/web/pdf_viewer.mjs';
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport as PDFPageViewport } from 'pdfjs-dist/types/src/pdf';
 
@@ -55,7 +55,7 @@ class PDFJSController {
         let resolvedWorkerSrc = workerSrc;
         if (pdfjsDistDir && !resolvedWorkerSrc) {
             const baseDir = pdfjsDistDir.replace(/\/$/, '');
-            resolvedWorkerSrc = `${baseDir}/legacy/build/pdf.worker.mjs`;
+            resolvedWorkerSrc = `${baseDir}/build/pdf.worker.mjs`;
             this.cMapUrl = `${baseDir}/cmaps/`;
             this.cMapPacked = true;
         } else {
