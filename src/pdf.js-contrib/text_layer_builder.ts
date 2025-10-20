@@ -31,18 +31,35 @@
  * also provides a way to highlight text that is being searched for.
  * @class
  */
+type TextLayerBuilderOptions = {
+  textLayerDiv: HTMLDivElement;
+  pageIndex: number;
+  viewport: PDFPageViewport;
+  findController?: any;
+};
+
+type TextMatchPosition = {
+  divIdx: number;
+  offset: number;
+};
+
+type TextMatch = {
+  begin: TextMatchPosition;
+  end: TextMatchPosition;
+};
+
 var TextLayerBuilder = (function TextLayerBuilderClosure() {
-  function TextLayerBuilder(options) {
+  function TextLayerBuilder(options: TextLayerBuilderOptions) {
     this.textLayerDiv = options.textLayerDiv;
     this.renderingDone = false;
     this.divContentDone = false;
     this.pageIdx = options.pageIndex;
     this.pageNumber = this.pageIdx + 1;
-    this.matches = [];
+    this.matches = [] as TextMatch[];
     this.viewport = options.viewport;
-    this.textDivs = [];
+    this.textDivs = [] as HTMLElement[];
     this.findController = options.findController || null;
-    this.textLayerRenderTask = null;
+    this.textLayerRenderTask = null as PDFRenderTask | null;
     this._bindMouse();
   }
 
@@ -66,7 +83,7 @@ var TextLayerBuilder = (function TextLayerBuilderClosure() {
      * @param {number} timeout (optional) if specified, the rendering waits
      *   for specified amount of ms.
      */
-    render: function TextLayerBuilder_render(timeout) {
+    render: function TextLayerBuilder_render(timeout?: number) {
       if (!this.divContentDone || this.renderingDone) {
         return;
       }
@@ -94,7 +111,7 @@ var TextLayerBuilder = (function TextLayerBuilderClosure() {
       });
     },
 
-    setTextContent: function TextLayerBuilder_setTextContent(textContent) {
+    setTextContent: function TextLayerBuilder_setTextContent(textContent: any) {
       if (this.textLayerRenderTask) {
         this.textLayerRenderTask.cancel();
         this.textLayerRenderTask = null;
@@ -103,14 +120,14 @@ var TextLayerBuilder = (function TextLayerBuilderClosure() {
       this.divContentDone = true;
     },
 
-    convertMatches: function TextLayerBuilder_convertMatches(matches) {
+    convertMatches: function TextLayerBuilder_convertMatches(matches: number[]) {
       var i = 0;
       var iIndex = 0;
       var bidiTexts = this.textContent.items;
       var end = bidiTexts.length - 1;
       var queryLen = (this.findController === null ?
                       0 : this.findController.state.query.length);
-      var ret = [];
+      var ret: TextMatch[] = [];
 
       for (var m = 0, len = matches.length; m < len; m++) {
         // Calculate the start position.
@@ -126,10 +143,14 @@ var TextLayerBuilder = (function TextLayerBuilderClosure() {
           console.error('Could not find a matching mapping');
         }
 
-        var match: any = {
+        var match: TextMatch = {
           begin: {
             divIdx: i,
             offset: matchIdx - iIndex
+          },
+          end: {
+            divIdx: i,
+            offset: 0
           }
         };
 
@@ -153,7 +174,7 @@ var TextLayerBuilder = (function TextLayerBuilderClosure() {
       return ret;
     },
 
-    renderMatches: function TextLayerBuilder_renderMatches(matches) {
+    renderMatches: function TextLayerBuilder_renderMatches(matches: TextMatch[]) {
       // Early exit if there is nothing to render.
       if (matches.length === 0) {
         return;

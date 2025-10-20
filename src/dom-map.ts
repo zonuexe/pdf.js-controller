@@ -9,12 +9,12 @@
  * @param {object} mapping
  * @returns {Object.<string,Node>}
  */
-function domMap(parentNode: ParentNode, mapping: Record<string, string>): Record<string, Element | null> {
-    var mappingKeys = Object.keys(mapping);
-    return mappingKeys.reduce(function (object: Record<string, Element | null>, key: string) {
+function domMap<T extends Record<string, string>>(parentNode: ParentNode, mapping: T): { [K in keyof T]: Element | null } {
+    var mappingKeys = Object.keys(mapping) as Array<keyof T>;
+    return mappingKeys.reduce(function (object: { [K in keyof T]: Element | null }, key: keyof T) {
         var selector = mapping[key];
-        object[key] = parentNode.querySelector(selector);
+        object[key] = parentNode.querySelector(selector) as Element | null;
         return object;
-    }, {} as Record<string, Element | null>);
+    }, {} as { [K in keyof T]: Element | null });
 }
 export = domMap;

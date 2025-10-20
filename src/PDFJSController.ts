@@ -34,7 +34,7 @@ interface ControllerDomMap {
 
 class PDFJSController {
     private declare pdfContainer: HTMLElement;
-    private declare pdfDoc: any;
+    private declare pdfDoc: PDFDocumentProxy | null;
     private declare pageNum: number;
     private declare promiseQueue: Promise<void>;
     private declare domMapObject: ControllerDomMap;
@@ -63,8 +63,8 @@ class PDFJSController {
             textLayer: '.pdf-textLayer',
             annotationLayer: '.pdf-annotationLayer',
             loading: '.pdf-loading'
-        };
-        this.domMapObject = domMap(dom, mapping) as ControllerDomMap;
+        } as const;
+        this.domMapObject = domMap(dom, mapping);
         container.appendChild(dom);
         this.canvasContext = this.domMapObject.canvas.getContext('2d') as CanvasRenderingContext2D;
         this.fitItSize();
@@ -79,13 +79,13 @@ class PDFJSController {
 
     loadDocument(url: string): Promise<void> {
         // load complete
-        let loading = this.domMapObject.loading;
+        let loading: HTMLElement = this.domMapObject.loading;
         function hideLoadingIcon() {
             loading.style.display = 'none';
         }
 
         this.pdfContainer.addEventListener((this.constructor as typeof PDFJSController).Events.before_pdf_rendering, hideLoadingIcon);
-        return PDFJS.getDocument(url).then((pdfDoc_: any) => {
+        return PDFJS.getDocument(url).then((pdfDoc_: PDFDocumentProxy) => {
             this.pdfDoc = pdfDoc_;
             return this._queueRenderPage(this.pageNum);
         }).then(() => {
@@ -127,7 +127,7 @@ class PDFJSController {
         const beforeEvent = new CustomEvent((this.constructor as typeof PDFJSController).Events.before_pdf_rendering, {detail: this});
         this.pdfContainer.dispatchEvent(beforeEvent);
         // Using promise to fetch the page
-        return this.pdfDoc.getPage(pageNum).then((page: any) => {
+        return this.pdfDoc!.getPage(pageNum).then((page: PDFPageProxy) => {
             this._cleanup();
             const domMapObject = this.domMapObject;
             const viewport = page.getViewport(domMapObject.canvas.width / page.getViewport(1).width);
@@ -136,7 +136,7 @@ class PDFJSController {
             domMapObject.textLayer.style.width = domMapObject.canvas.style.width;
             domMapObject.textLayer.style.height = domMapObject.canvas.style.height;
             // Render PDF page into canvas context
-            const renderContext = {
+            const renderContext: { canvasContext: CanvasRenderingContext2D; viewport: PDFPageViewport } = {
                 canvasContext: this.canvasContext,
                 viewport: viewport
             };
@@ -153,7 +153,7 @@ class PDFJSController {
             return Promise.all([
                 renderPromise,
                 textLayerPromise
-            ]).then((result) => {
+            ]).then(() => {
                 this._setupAnnotations(page, viewport, domMapObject.annotationLayer);
             });
         }).then(() => {
@@ -182,14 +182,14 @@ class PDFJSController {
     _updateProgress(pageNum: number): void {
         const progressBar = this.domMapObject.progressBar;
         if (progressBar !== null) {
-            const numSlides = this.pdfDoc.numPages;
+            const numSlides = this.pdfDoc!.numPages;
             let position = pageNum - 1;
             const percent = numSlides === 1 ? 100 : 100 * position / (numSlides - 1);
             progressBar.style.width = `${ percent.toString() }%`;
         }
     }
 
-    _setupAnnotations(page: any, viewport: any, annotationArea: HTMLElement): Promise<void> {
+    _setupAnnotations(page: PDFPageProxy, viewport: PDFPageViewport, annotationArea: HTMLDivElement): Promise<void> {
         return page.getAnnotations().then((annotationsData: any[]) => {
             const cViewport = viewport.clone({dontFlip: true});
             for (let i = 0; i < annotationsData.length; i++) {
@@ -197,7 +197,7 @@ class PDFJSController {
                 if (!data || !data.hasHtml) {
                     continue;
                 }
-                const element = PDFJS.AnnotationUtils.getHtmlElement(data);
+                const element = PDFJS.AnnotationUtils.getHtmlElement(data) as HTMLElement;
                 let rect = data.rect;
                 const view = page.view;
                 rect = PDFJS.Util.normalizeRect([
