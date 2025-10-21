@@ -2,14 +2,14 @@
   "name": "@zonuexe/pdf.js-controller",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/azu/pdf.js-controller.git"
+    "url": "git+https://github.com/zonuexe/pdf.js-controller.git"
   },
   "author": "azu",
   "email": "azuciao@gmail.com",
-  "homepage": "https://github.com/azu/pdf.js-controller",
+  "homepage": "https://github.com/zonuexe/pdf.js-controller",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/azu/pdf.js-controller/issues"
+    "url": "https://github.com/zonuexe/pdf.js-controller/issues"
   },
   "version": "1.1.0",
   "description": "provide controller and text layer for pdf.js",
