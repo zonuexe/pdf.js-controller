@@ -184,10 +184,13 @@ class PDFJSController {
             const { canvas, textLayer, annotationLayer } = this.domMapObject;
             const initialViewport = page.getViewport({ scale: 1 });
             const containerRect = this.pdfContainer.getBoundingClientRect();
-            const cssWidth = containerRect.width || initialViewport.width;
-            const cssHeight = containerRect.height || initialViewport.height;
+            let cssWidth = containerRect.width;
+            if (!cssWidth || !Number.isFinite(cssWidth)) {
+                cssWidth = this.domMapObject.canvas.clientWidth || initialViewport.width;
+            }
             const scale = cssWidth / initialViewport.width;
             const viewport = page.getViewport({ scale });
+            const cssHeight = viewport.height;
 
             canvas.style.width = `${cssWidth}px`;
             canvas.style.height = `${cssHeight}px`;
@@ -197,8 +200,9 @@ class PDFJSController {
             annotationLayer.style.height = `${cssHeight}px`;
 
             const dpr = window.devicePixelRatio || 1;
-            canvas.width = Math.round(cssWidth * dpr);
-            canvas.height = Math.round(cssHeight * dpr);
+            const maxSize = 16384; // avoid exceeding browser canvas limits
+            canvas.width = Math.min(Math.round(viewport.width * dpr), maxSize);
+            canvas.height = Math.min(Math.round(viewport.height * dpr), maxSize);
 
             this.canvasContext.setTransform(1, 0, 0, 1, 0, 0);
 
