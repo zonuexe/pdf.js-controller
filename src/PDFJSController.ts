@@ -185,19 +185,33 @@ class PDFJSController {
 
             const { canvas, textLayer, annotationLayer } = this.domMapObject;
             const initialViewport = page.getViewport({ scale: 1 });
-            const desiredWidth = this.domMapObject.canvas.width || canvas.clientWidth || initialViewport.width;
-            const scale = desiredWidth / initialViewport.width;
+            const containerRect = this.pdfContainer.getBoundingClientRect();
+            const cssWidth = containerRect.width || initialViewport.width;
+            const cssHeight = containerRect.height || initialViewport.height;
+            const scale = cssWidth / initialViewport.width;
             const viewport = page.getViewport({ scale });
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-            textLayer.style.width = `${viewport.width}px`;
-            textLayer.style.height = `${viewport.height}px`;
+
+            canvas.style.width = `${cssWidth}px`;
+            canvas.style.height = `${cssHeight}px`;
+            textLayer.style.width = `${cssWidth}px`;
+            textLayer.style.height = `${cssHeight}px`;
+            annotationLayer.style.width = `${cssWidth}px`;
+            annotationLayer.style.height = `${cssHeight}px`;
+
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = Math.round(cssWidth * dpr);
+            canvas.height = Math.round(cssHeight * dpr);
+
+            this.canvasContext.setTransform(1, 0, 0, 1, 0, 0);
 
             const renderParameters: RenderParameters = {
                 canvasContext: this.canvasContext,
                 viewport,
                 canvas
             };
+            if (dpr !== 1) {
+                renderParameters.transform = [dpr, 0, 0, dpr, 0, 0];
+            }
             const renderTask: RenderTask = page.render(renderParameters);
 
             const textLayerBuilder = new TextLayerBuilder({
