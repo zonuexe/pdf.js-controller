@@ -47,7 +47,6 @@ class PDFJSController {
     private readonly canvasContext: CanvasRenderingContext2D;
     private readonly eventBus = new EventBus();
     private readonly linkService = new SimpleLinkService({ eventBus: this.eventBus });
-    private readonly workerSrc?: string;
     private readonly cMapUrl?: string;
     private readonly cMapPacked?: boolean;
 
@@ -65,7 +64,6 @@ class PDFJSController {
             this.cMapUrl = cMapUrl;
             this.cMapPacked = cMapPacked;
         }
-        this.workerSrc = resolvedWorkerSrc;
         if (resolvedWorkerSrc) {
             pdfjsLib.GlobalWorkerOptions.workerSrc = resolvedWorkerSrc;
         }
