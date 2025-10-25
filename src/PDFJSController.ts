@@ -1,6 +1,5 @@
 // LICENSE : MIT
 
-import 'custom-event-polyfill';
 import domify from 'domify';
 
 import domMap from './dom-map';
