@@ -10,12 +10,10 @@ type DomMapResult<Selectors extends SelectorMap> = {
 };
 
 const domMap = <Selectors extends SelectorMap, Result extends DomMapResult<Selectors> = DomMapResult<Selectors>>(parentNode: ParentNode, mapping: Selectors): Result => {
-    const mappingKeys = Object.keys(mapping) as Array<keyof Selectors>;
-    return mappingKeys.reduce<Result>((accumulator, key) => {
-        const selector = mapping[key];
-        accumulator[key] = parentNode.querySelector(selector) as Result[typeof key];
-        return accumulator;
-    }, {} as Result);
+    const resolvedEntries = (Object.entries(mapping) as Array<[keyof Selectors, Selectors[keyof Selectors]]>).map(
+        ([key, selector]) => [key, parentNode.querySelector(selector)] as const
+    );
+    return Object.fromEntries(resolvedEntries) as Result;
 };
 
 export default domMap;
