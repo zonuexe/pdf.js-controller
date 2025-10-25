@@ -35,8 +35,8 @@ const defaultInnerHTML = `<div class="pdf-slide-progress">
 </div>
 <div class="pdf-loading"></div>
 <canvas class="pdf-canvas"></canvas>
-<div class="pdf-textLayer"></div>
-<div class="pdf-annotationLayer"></div>`;
+<div class="textLayer"></div>
+<div class="annotationLayer"></div>`;
 
 class PDFJSController {
     private readonly pdfContainer: HTMLElement;
@@ -73,8 +73,8 @@ class PDFJSController {
         const mapping = {
             progressBar: '.pdf-slide-progress-bar',
             canvas: '.pdf-canvas',
-            textLayer: '.pdf-textLayer',
-            annotationLayer: '.pdf-annotationLayer',
+            textLayer: '.textLayer',
+            annotationLayer: '.annotationLayer',
             loading: '.pdf-loading'
         } as const;
 
