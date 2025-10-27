@@ -1,7 +1,5 @@
 // LICENSE : MIT
 
-import domify from 'domify';
-
 import domMap from './dom-map';
 
 import * as pdfjsLib from 'pdfjs-dist';
@@ -37,6 +35,12 @@ const defaultInnerHTML = `<div class="pdf-slide-progress">
 <div class="textLayer"></div>
 <div class="annotationLayer"></div>`;
 
+const parseTemplate = (markup: string): DocumentFragment => {
+    const template = document.createElement('template');
+    template.innerHTML = markup;
+    return template.content;
+};
+
 class PDFJSController {
     private readonly pdfContainer: HTMLElement;
     private pdfDoc: PDFDocumentProxy | null = null;
@@ -68,7 +72,7 @@ class PDFJSController {
         }
 
         const html = innerHTML ?? defaultInnerHTML;
-        const dom = domify(html);
+        const dom = parseTemplate(html);
         const mapping = {
             progressBar: '.pdf-slide-progress-bar',
             canvas: '.pdf-canvas',

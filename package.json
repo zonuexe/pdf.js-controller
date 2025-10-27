@@ -46,7 +46,6 @@
     "typescript": "^5.4.2"
   },
   "dependencies": {
-    "domify": "^1.4.0",
     "pdfjs-dist": "^5.4.296"
   }
 }
