@@ -5,7 +5,17 @@
     "url": "git+https://github.com/zonuexe/pdf.js-controller.git"
   },
   "author": "azu",
-  "email": "azuciao@gmail.com",
+  "maintainers": [
+    {
+      "name": "zonuexe",
+      "email": "tadsan@zonu.me",
+      "url": "https://github.com/zonuexe"
+    }
+  ],
+  "contributors": [
+    { "name": "azu" },
+    { "name": "zonuexe" }
+  ],
   "homepage": "https://github.com/zonuexe/pdf.js-controller",
   "license": "MIT",
   "bugs": {
