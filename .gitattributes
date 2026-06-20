@@ -1,0 +1,8 @@
+# Keep source archives (git archive / GitHub "Download ZIP" and release
+# tarballs) lean by dropping files that don't need to be redistributed.
+# Note: this does NOT affect the npm package, which is scoped by the "files"
+# field in package.json.
+/example export-ignore
+/.babelrc export-ignore
+/.gitignore export-ignore
+/.gitattributes export-ignore
