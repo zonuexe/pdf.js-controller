@@ -7,6 +7,7 @@ import { AnnotationLayerBuilder, EventBus, SimpleLinkService, TextLayerBuilder }
 import type { PDFDocumentProxy, PDFPageProxy, PageViewport as PDFPageViewport } from 'pdfjs-dist/types/src/pdf';
 import type { DocumentInitParameters, PDFDocumentLoadingTask, RenderParameters, RenderTask } from 'pdfjs-dist/types/src/display/api';
 import type { TextLayerBuilderRenderOptions } from 'pdfjs-dist/types/web/text_layer_builder';
+import type { TextLayerImages } from 'pdfjs-dist/types/src/display/text_layer_images';
 import type { AnnotationLayerBuilderRenderOptions } from 'pdfjs-dist/types/web/annotation_layer_builder';
 
 interface PDFJSControllerOptions {
@@ -226,7 +227,12 @@ class PDFJSController {
                 }
             });
 
-            const textLayerRenderOptions: TextLayerBuilderRenderOptions = { viewport };
+            // `images` powers pdf.js's right-click image-extraction feature, which this
+            // controller does not use; pdf.js's own viewer passes null in the same case.
+            const textLayerRenderOptions: TextLayerBuilderRenderOptions = {
+                viewport,
+                images: null as unknown as TextLayerImages
+            };
 
             await Promise.all([
                 renderTask.promise,

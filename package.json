@@ -13,8 +13,12 @@
     }
   ],
   "contributors": [
-    { "name": "azu" },
-    { "name": "zonuexe" }
+    {
+      "name": "azu"
+    },
+    {
+      "name": "zonuexe"
+    }
   ],
   "homepage": "https://github.com/zonuexe/pdf.js-controller",
   "license": "MIT",
@@ -52,10 +56,10 @@
     "slide"
   ],
   "devDependencies": {
-    "esbuild": "^0.25.11",
-    "typescript": "^5.4.2"
+    "esbuild": "^0.28.1",
+    "typescript": "^6.0.3"
   },
   "dependencies": {
-    "pdfjs-dist": "^5.4.296"
+    "pdfjs-dist": "^6.0.227"
   }
 }
