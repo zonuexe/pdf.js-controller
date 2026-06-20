@@ -1,14 +1,18 @@
 // LICENSE : MIT
 
-import domMap from './dom-map';
+import domMap from './dom-map.js';
 
 import * as pdfjsLib from 'pdfjs-dist';
 import { AnnotationLayerBuilder, EventBus, SimpleLinkService, TextLayerBuilder } from 'pdfjs-dist/web/pdf_viewer.mjs';
-import type { PDFDocumentProxy, PDFPageProxy, PageViewport as PDFPageViewport } from 'pdfjs-dist/types/src/pdf';
-import type { DocumentInitParameters, PDFDocumentLoadingTask, RenderParameters, RenderTask } from 'pdfjs-dist/types/src/display/api';
-import type { TextLayerBuilderRenderOptions } from 'pdfjs-dist/types/web/text_layer_builder';
-import type { TextLayerImages } from 'pdfjs-dist/types/src/display/text_layer_images';
-import type { AnnotationLayerBuilderRenderOptions } from 'pdfjs-dist/types/web/annotation_layer_builder';
+import type { PDFDocumentProxy, PDFPageProxy, PageViewport as PDFPageViewport, PDFDocumentLoadingTask, RenderTask } from 'pdfjs-dist';
+
+// pdfjs-dist v6 exposes these option/parameter types only via deep, non-exported
+// paths that Node16/NodeNext module resolution can't reach, so derive them from
+// the public runtime API surface instead.
+type DocumentInitParameters = NonNullable<Parameters<typeof pdfjsLib.getDocument>[0]>;
+type RenderParameters = Parameters<PDFPageProxy['render']>[0];
+type TextLayerBuilderRenderOptions = Parameters<TextLayerBuilder['render']>[0];
+type AnnotationLayerBuilderRenderOptions = Parameters<AnnotationLayerBuilder['render']>[0];
 
 interface PDFJSControllerOptions {
     container: HTMLElement;
@@ -231,7 +235,7 @@ class PDFJSController {
             // controller does not use; pdf.js's own viewer passes null in the same case.
             const textLayerRenderOptions: TextLayerBuilderRenderOptions = {
                 viewport,
-                images: null as unknown as TextLayerImages
+                images: null as unknown as TextLayerBuilderRenderOptions['images']
             };
 
             await Promise.all([
@@ -279,4 +283,4 @@ class PDFJSController {
     }
 }
 
-export = PDFJSController;
+export default PDFJSController;

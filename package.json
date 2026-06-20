@@ -25,9 +25,11 @@
   "bugs": {
     "url": "https://github.com/zonuexe/pdf.js-controller/issues"
   },
-  "version": "1.3.0",
+  "version": "2.0.0",
   "description": "provide controller and text layer for pdf.js",
+  "type": "module",
   "main": "./lib/PDFJSController.js",
+  "types": "./lib/PDFJSController.d.ts",
   "files": [
     "build",
     "css",
