@@ -81,6 +81,8 @@ controller
   });
 ```
 
+Call `controller.destroy()` when the viewer is removed from the page.
+
 ## Development
 
 ```bash

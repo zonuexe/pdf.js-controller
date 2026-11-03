@@ -1,6 +1,7 @@
 // LICENSE : MIT
 
 import * as pdfjsLib from "pdfjs-dist";
+import { RenderingCancelledException } from "pdfjs-dist";
 import {
   AnnotationLayerBuilder,
   EventBus,
@@ -93,6 +94,9 @@ export class PDFJSController {
   #pdfDoc: PDFDocumentProxy | null = null;
   #pageNum: number;
   #promiseQueue: Promise<void> = Promise.resolve();
+  #generation = 0;
+  #loadingTask: PDFDocumentLoadingTask | null = null;
+  #renderTask: RenderTask | null = null;
   #eventBus = new EventBus();
   #linkService = new SimpleLinkService({ eventBus: this.#eventBus });
   #cMapUrl?: string;
@@ -166,6 +170,8 @@ export class PDFJSController {
     this.#pdfContainer.addEventListener(Events.before_pdf_rendering, hideLoadingIcon);
 
     try {
+      await this.#destroyDocument();
+
       const params: DocumentInitParameters =
         typeof source === "string" || source instanceof URL ? { url: source } : { ...source };
       if (this.#cMapUrl && !params.cMapUrl) {
@@ -179,13 +185,24 @@ export class PDFJSController {
         params.cMapPacked = this.#cMapPacked;
       }
 
-      const loadingTask: PDFDocumentLoadingTask = pdfjsLib.getDocument(params);
-      this.#pdfDoc = await loadingTask.promise;
+      this.#loadingTask = pdfjsLib.getDocument(params);
+      this.#pdfDoc = await this.#loadingTask.promise;
+      if (this.#pageNum > this.#pdfDoc.numPages) {
+        this.#pageNum = this.#pdfDoc.numPages;
+      }
+      if (this.#pageNum < 1) {
+        this.#pageNum = 1;
+      }
       this.#linkService.setDocument(this.#pdfDoc);
       await this.#queueRenderPage(this.#pageNum);
     } finally {
       this.#pdfContainer.removeEventListener(Events.before_pdf_rendering, hideLoadingIcon);
     }
+  }
+
+  async destroy(): Promise<void> {
+    await this.#destroyDocument();
+    this.#cleanup();
   }
 
   async fitItSize(): Promise<void> {
@@ -216,14 +233,41 @@ export class PDFJSController {
       return Promise.resolve();
     }
 
+    this.#cancelRender();
     this.#promiseQueue = this.#promiseQueue
       .then(() => this.#renderPage(pageNumber))
       .catch((error: unknown) => {
+        if (error instanceof RenderingCancelledException) {
+          return;
+        }
         this.#promiseQueue = Promise.resolve();
         throw error;
       });
 
     return this.#promiseQueue;
+  }
+
+  #cancelRender(): void {
+    this.#renderTask?.cancel();
+    this.#renderTask = null;
+  }
+
+  async #destroyDocument(): Promise<void> {
+    this.#generation += 1;
+    this.#cancelRender();
+    try {
+      await this.#promiseQueue;
+    } catch {
+      // The queue already handles render failures.
+    }
+    this.#promiseQueue = Promise.resolve();
+    this.#linkService.setDocument(null);
+    const loadingTask = this.#loadingTask;
+    this.#loadingTask = null;
+    this.#pdfDoc = null;
+    if (loadingTask && !loadingTask.destroyed) {
+      await loadingTask.destroy();
+    }
   }
 
   #cleanup(): void {
@@ -232,15 +276,21 @@ export class PDFJSController {
   }
 
   async #renderPage(pageNumber: number): Promise<void> {
-    if (!this.#pdfDoc) {
+    const generation = this.#generation;
+    const pdfDoc = this.#pdfDoc;
+    if (!pdfDoc) {
       return;
     }
 
     const beforeEvent = new CustomEvent(Events.before_pdf_rendering, { detail: this });
     this.#pdfContainer.dispatchEvent(beforeEvent);
 
+    let cancelled = false;
     try {
-      const page = await this.#pdfDoc.getPage(pageNumber);
+      const page = await pdfDoc.getPage(pageNumber);
+      if (generation !== this.#generation) {
+        return;
+      }
       this.#cleanup();
 
       const { canvas, textLayer, annotationLayer } = this.domMapObject;
@@ -276,7 +326,9 @@ export class PDFJSController {
       if (dpr !== 1) {
         renderParameters.transform = [dpr, 0, 0, dpr, 0, 0];
       }
+      this.#cancelRender();
       const renderTask: RenderTask = page.render(renderParameters);
+      this.#renderTask = renderTask;
 
       const textLayerBuilder = new TextLayerBuilder({
         pdfPage: page,
@@ -294,11 +346,20 @@ export class PDFJSController {
           images: null,
         } as unknown as TextLayerBuilderRenderOptions),
       ]);
+      this.#renderTask = null;
 
       await this.#setupAnnotations(page, viewport, annotationLayer);
+    } catch (error: unknown) {
+      if (error instanceof RenderingCancelledException) {
+        cancelled = true;
+        return;
+      }
+      throw error;
     } finally {
-      const afterEvent = new CustomEvent(Events.after_pdf_rendering, { detail: this });
-      this.#pdfContainer.dispatchEvent(afterEvent);
+      if (!cancelled) {
+        const afterEvent = new CustomEvent(Events.after_pdf_rendering, { detail: this });
+        this.#pdfContainer.dispatchEvent(afterEvent);
+      }
     }
 
     this.#updateProgress(pageNumber);
