@@ -34,6 +34,8 @@ export default defineConfig({
     },
     dts: true,
     sourcemap: true,
+    publint: true,
+    attw: true,
     // Declaration maps point at unpublished src/, and top-level sourcemap: true
     // still writes a dangling sourceMappingURL into the .d.mts.
     onSuccess() {
