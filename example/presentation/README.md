@@ -4,14 +4,14 @@
 
 From the repository root:
 
-    npm install
+    pnpm install
 
 ## Usage
 
-    npm start
+    pnpm start
     open http://localhost:9080
 
-`npm start` runs the Vite+ dev server for this example.
+`pnpm start` runs the Vite+ dev server for this example.
 
 ## Limitation
 

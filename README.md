@@ -12,7 +12,7 @@ This library provide programming friendly usage of [mozilla/pdf.js](https://gith
 
 ## Installation
 
-    npm install @zonuexe/pdf.js-controller
+    pnpm add @zonuexe/pdf.js-controller
 
 Dependencies
 
@@ -84,10 +84,10 @@ controller
 ## Development
 
 ```bash
-npm install
-npm run build   # vp pack
-npm start       # example on http://localhost:9080
-npm run check   # format, lint, type-check
+pnpm install
+pnpm build   # vp pack
+pnpm start   # example on http://localhost:9080
+pnpm check   # format, lint, type-check
 ```
 
 ## Contributing

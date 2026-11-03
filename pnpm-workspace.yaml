@@ -1,0 +1,9 @@
+packages:
+  - example/presentation
+
+overrides:
+  vite: npm:@voidzero-dev/vite-plus-core@1.4.0
+
+peerDependencyRules:
+  allowAny:
+    - vite
