@@ -11,11 +11,11 @@
   "author": "azu",
   "license": "MIT",
   "devDependencies": {
-    "esbuild": "^0.28.1",
+    "esbuild": "^0.28.2",
     "static-server": "^2.0.2"
   },
   "dependencies": {
     "@zonuexe/pdf.js-controller": "../../",
-    "pdfjs-dist": "^6.0.227"
+    "pdfjs-dist": "^6.5.438"
   }
 }

@@ -58,10 +58,10 @@
     "slide"
   ],
   "devDependencies": {
-    "esbuild": "^0.28.1",
-    "typescript": "^6.0.3"
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
   },
   "dependencies": {
-    "pdfjs-dist": "^6.0.227"
+    "pdfjs-dist": "^6.5.438"
   }
 }
