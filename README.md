@@ -44,6 +44,7 @@ const controller = new PDFController({
   workerSrc: new URL("./pdf.worker.mjs", import.meta.url).toString(),
   cMapUrl: new URL("./cmaps/", import.meta.url).toString(),
   cMapPacked: true,
+  doubleBuffer: true,
 });
 
 const pdfUrl = new URL("./example.pdf", import.meta.url).toString();
@@ -82,6 +83,8 @@ controller
 ```
 
 Named exports include `Events`, `PDFJSController`, and the option/DOM/event types. Call `controller.destroy()` when the viewer is removed from the page.
+
+`doubleBuffer: true` keeps the previous page on screen until the next page has finished painting. Read `controller.domMapObject.canvas` and `controller.canvasContext` from event handlers when you need the current surface; a retained canvas element is detached on the next swap. The first page has no previous bitmap, so the surface stays empty until that render commits. Double buffering holds two full-size canvases until `destroy()`. `before-pdf-rendering` / `after-pdf-rendering` are paired per attempt, including cancelled or superseded renders.
 
 ## Development
 

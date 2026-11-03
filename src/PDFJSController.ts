@@ -42,6 +42,11 @@ export interface PDFJSControllerOptions {
   workerSrc?: string;
   cMapUrl?: string;
   cMapPacked?: boolean;
+  /**
+   * Paint onto a back canvas and swap it in when the page is complete.
+   * The previously displayed page stays visible during fast page changes.
+   */
+  doubleBuffer?: boolean;
 }
 
 export interface PDFJSControllerDomMap {
@@ -84,10 +89,19 @@ const optionalHTMLElement = (root: ParentNode, selector: string): HTMLElement | 
   return element instanceof HTMLElement ? element : null;
 };
 
+const require2dContext = (canvas: HTMLCanvasElement): CanvasRenderingContext2D => {
+  const context = canvas.getContext("2d", {
+    willReadFrequently: true,
+  });
+  if (!context) {
+    throw new Error("Unable to obtain a 2D canvas context.");
+  }
+  return context;
+};
+
 export class PDFJSController {
   static readonly Events = Events;
 
-  readonly canvasContext: CanvasRenderingContext2D;
   readonly domMapObject: PDFJSControllerDomMap;
 
   #pdfContainer: HTMLElement;
@@ -97,6 +111,19 @@ export class PDFJSController {
   #generation = 0;
   #loadingTask: PDFDocumentLoadingTask | null = null;
   #renderTask: RenderTask | null = null;
+  #rendering = false;
+  #dirty = false;
+  #doubleBuffer: boolean;
+  #canvasContext: CanvasRenderingContext2D;
+  #backCanvas: HTMLCanvasElement | null = null;
+  #backContext: CanvasRenderingContext2D | null = null;
+  #domMap: {
+    progressBar: HTMLElement | null;
+    canvas: HTMLCanvasElement;
+    textLayer: HTMLDivElement;
+    annotationLayer: HTMLDivElement;
+    loading: HTMLElement;
+  };
   #eventBus = new EventBus();
   #linkService = new SimpleLinkService({ eventBus: this.#eventBus });
   #cMapUrl?: string;
@@ -110,6 +137,7 @@ export class PDFJSController {
     workerSrc,
     cMapUrl,
     cMapPacked,
+    doubleBuffer = false,
   }: PDFJSControllerOptions) {
     this.#pdfContainer = container;
     this.#pageNum = pageNumber ?? 1;
@@ -130,24 +158,33 @@ export class PDFJSController {
 
     const html = innerHTML ?? defaultInnerHTML;
     const dom = parseTemplate(html);
-    this.domMapObject = {
+    this.#domMap = {
       progressBar: optionalHTMLElement(dom, ".pdf-slide-progress-bar"),
       canvas: requireElement(dom, ".pdf-canvas", HTMLCanvasElement, "canvas"),
       textLayer: requireElement(dom, ".textLayer", HTMLDivElement, "text layer"),
       annotationLayer: requireElement(dom, ".annotationLayer", HTMLDivElement, "annotation layer"),
       loading: requireElement(dom, ".pdf-loading", HTMLElement, "loading"),
-    } satisfies PDFJSControllerDomMap;
+    };
+    this.domMapObject = this.#domMap;
     container.appendChild(dom);
 
-    const canvasContext = this.domMapObject.canvas.getContext("2d", {
-      willReadFrequently: true,
-    });
-    if (!canvasContext) {
-      throw new Error("Unable to obtain a 2D canvas context.");
+    this.#doubleBuffer = doubleBuffer;
+    this.#canvasContext = require2dContext(this.#domMap.canvas);
+    if (this.#doubleBuffer) {
+      this.#backCanvas = document.createElement("canvas");
+      this.#backCanvas.className = this.#domMap.canvas.className;
+      this.#backContext = require2dContext(this.#backCanvas);
     }
-    this.canvasContext = canvasContext;
 
     void this.fitItSize();
+  }
+
+  get canvasContext(): CanvasRenderingContext2D {
+    return this.#canvasContext;
+  }
+
+  get doubleBuffer(): boolean {
+    return this.#doubleBuffer;
   }
 
   get pageNumber(): number {
@@ -194,7 +231,7 @@ export class PDFJSController {
         this.#pageNum = 1;
       }
       this.#linkService.setDocument(this.#pdfDoc);
-      await this.#queueRenderPage(this.#pageNum);
+      await this.#queueRenderPage();
     } finally {
       this.#pdfContainer.removeEventListener(Events.before_pdf_rendering, hideLoadingIcon);
     }
@@ -203,13 +240,16 @@ export class PDFJSController {
   async destroy(): Promise<void> {
     await this.#destroyDocument();
     this.#cleanup();
+    this.#releaseCanvases();
   }
 
   async fitItSize(): Promise<void> {
-    const containerRect = this.#pdfContainer.getBoundingClientRect();
-    this.domMapObject.canvas.width = containerRect.width;
-    this.domMapObject.canvas.height = containerRect.height;
-    await this.#queueRenderPage(this.#pageNum);
+    if (!this.#doubleBuffer) {
+      const containerRect = this.#pdfContainer.getBoundingClientRect();
+      this.#domMap.canvas.width = containerRect.width;
+      this.#domMap.canvas.height = containerRect.height;
+    }
+    await this.#queueRenderPage();
   }
 
   async prevPage(): Promise<void> {
@@ -217,7 +257,7 @@ export class PDFJSController {
       return;
     }
     this.#pageNum -= 1;
-    await this.#queueRenderPage(this.#pageNum);
+    await this.#queueRenderPage();
   }
 
   async nextPage(): Promise<void> {
@@ -225,26 +265,49 @@ export class PDFJSController {
       return;
     }
     this.#pageNum += 1;
-    await this.#queueRenderPage(this.#pageNum);
+    await this.#queueRenderPage();
   }
 
-  #queueRenderPage(pageNumber: number): Promise<void> {
+  #queueRenderPage(): Promise<void> {
     if (!this.#pdfDoc) {
       return Promise.resolve();
     }
 
+    this.#dirty = true;
     this.#cancelRender();
-    this.#promiseQueue = this.#promiseQueue
-      .then(() => this.#renderPage(pageNumber))
-      .catch((error: unknown) => {
-        if (error instanceof RenderingCancelledException) {
-          return;
-        }
-        this.#promiseQueue = Promise.resolve();
-        throw error;
-      });
+    if (this.#rendering) {
+      return this.#promiseQueue;
+    }
+
+    this.#rendering = true;
+    const generation = this.#generation;
+    this.#promiseQueue = this.#runRenderLoop(generation).catch((error: unknown) => {
+      if (error instanceof RenderingCancelledException) {
+        return;
+      }
+      this.#promiseQueue = Promise.resolve();
+      throw error;
+    });
 
     return this.#promiseQueue;
+  }
+
+  async #runRenderLoop(generation: number): Promise<void> {
+    try {
+      while (this.#pdfDoc && this.#generation === generation) {
+        this.#dirty = false;
+        await this.#renderPage(this.#pageNum);
+        if (!this.#dirty) {
+          break;
+        }
+      }
+    } finally {
+      this.#rendering = false;
+    }
+  }
+
+  #isStale(generation: number, pageNumber: number): boolean {
+    return this.#generation !== generation || this.#pageNum !== pageNumber || this.#dirty;
   }
 
   #cancelRender(): void {
@@ -254,6 +317,7 @@ export class PDFJSController {
 
   async #destroyDocument(): Promise<void> {
     this.#generation += 1;
+    this.#dirty = false;
     this.#cancelRender();
     try {
       await this.#promiseQueue;
@@ -275,6 +339,15 @@ export class PDFJSController {
     this.domMapObject.annotationLayer.replaceChildren();
   }
 
+  #releaseCanvases(): void {
+    this.#domMap.canvas.width = 0;
+    this.#domMap.canvas.height = 0;
+    if (this.#backCanvas) {
+      this.#backCanvas.width = 0;
+      this.#backCanvas.height = 0;
+    }
+  }
+
   async #renderPage(pageNumber: number): Promise<void> {
     const generation = this.#generation;
     const pdfDoc = this.#pdfDoc;
@@ -282,46 +355,51 @@ export class PDFJSController {
       return;
     }
 
-    const beforeEvent = new CustomEvent(Events.before_pdf_rendering, { detail: this });
-    this.#pdfContainer.dispatchEvent(beforeEvent);
-
-    let cancelled = false;
+    let beforeDispatched = false;
     try {
+      this.#pdfContainer.dispatchEvent(
+        new CustomEvent(Events.before_pdf_rendering, { detail: this }),
+      );
+      beforeDispatched = true;
+
       const page = await pdfDoc.getPage(pageNumber);
-      if (generation !== this.#generation) {
+      if (this.#isStale(generation, pageNumber)) {
         return;
       }
-      this.#cleanup();
 
-      const { canvas, textLayer, annotationLayer } = this.domMapObject;
+      const targetCanvas = this.#doubleBuffer ? this.#backCanvas! : this.#domMap.canvas;
+      const targetContext = this.#doubleBuffer ? this.#backContext! : this.#canvasContext;
+      const { textLayer, annotationLayer } = this.#domMap;
       const initialViewport = page.getViewport({ scale: 1 });
       const containerRect = this.#pdfContainer.getBoundingClientRect();
       let cssWidth = containerRect.width;
       if (!cssWidth || !Number.isFinite(cssWidth)) {
-        cssWidth = canvas.clientWidth || initialViewport.width;
+        cssWidth = targetCanvas.clientWidth || initialViewport.width;
       }
       const scale = cssWidth / initialViewport.width;
       const viewport = page.getViewport({ scale });
       const cssHeight = viewport.height;
 
-      canvas.style.width = `${cssWidth}px`;
-      canvas.style.height = `${cssHeight}px`;
-      textLayer.style.width = `${cssWidth}px`;
-      textLayer.style.height = `${cssHeight}px`;
-      annotationLayer.style.width = `${cssWidth}px`;
-      annotationLayer.style.height = `${cssHeight}px`;
-
+      targetCanvas.style.width = `${cssWidth}px`;
+      targetCanvas.style.height = `${cssHeight}px`;
       const dpr = window.devicePixelRatio || 1;
       const maxSize = 16384; // avoid exceeding browser canvas limits
-      canvas.width = Math.min(Math.round(viewport.width * dpr), maxSize);
-      canvas.height = Math.min(Math.round(viewport.height * dpr), maxSize);
+      targetCanvas.width = Math.min(Math.round(viewport.width * dpr), maxSize);
+      targetCanvas.height = Math.min(Math.round(viewport.height * dpr), maxSize);
+      targetContext.setTransform(1, 0, 0, 1, 0, 0);
 
-      this.canvasContext.setTransform(1, 0, 0, 1, 0, 0);
+      if (!this.#doubleBuffer) {
+        this.#cleanup();
+        textLayer.style.width = `${cssWidth}px`;
+        textLayer.style.height = `${cssHeight}px`;
+        annotationLayer.style.width = `${cssWidth}px`;
+        annotationLayer.style.height = `${cssHeight}px`;
+      }
 
       const renderParameters: RenderParameters = {
-        canvasContext: this.canvasContext,
+        canvasContext: targetContext,
         viewport,
-        canvas,
+        canvas: targetCanvas,
       };
       if (dpr !== 1) {
         renderParameters.transform = [dpr, 0, 0, dpr, 0, 0];
@@ -330,10 +408,15 @@ export class PDFJSController {
       const renderTask: RenderTask = page.render(renderParameters);
       this.#renderTask = renderTask;
 
+      let nextText: HTMLDivElement | undefined;
       const textLayerBuilder = new TextLayerBuilder({
         pdfPage: page,
         onAppend: (div: HTMLDivElement) => {
-          textLayer.replaceChildren(div);
+          if (this.#doubleBuffer) {
+            nextText = div;
+          } else {
+            textLayer.replaceChildren(div);
+          }
         },
       });
 
@@ -348,21 +431,71 @@ export class PDFJSController {
       ]);
       this.#renderTask = null;
 
-      await this.#setupAnnotations(page, viewport, annotationLayer);
+      if (this.#isStale(generation, pageNumber)) {
+        return;
+      }
+
+      let nextAnnotations: HTMLDivElement | undefined;
+      await this.#setupAnnotations(
+        page,
+        viewport,
+        annotationLayer,
+        this.#doubleBuffer
+          ? (div) => {
+              nextAnnotations = div;
+            }
+          : undefined,
+      );
+
+      if (this.#isStale(generation, pageNumber)) {
+        return;
+      }
+
+      if (this.#doubleBuffer) {
+        this.#commitBuffers(cssWidth, cssHeight, nextText, nextAnnotations);
+      }
+
+      this.#updateProgress(pageNumber);
     } catch (error: unknown) {
       if (error instanceof RenderingCancelledException) {
-        cancelled = true;
         return;
       }
       throw error;
     } finally {
-      if (!cancelled) {
-        const afterEvent = new CustomEvent(Events.after_pdf_rendering, { detail: this });
-        this.#pdfContainer.dispatchEvent(afterEvent);
+      if (beforeDispatched) {
+        this.#pdfContainer.dispatchEvent(
+          new CustomEvent(Events.after_pdf_rendering, { detail: this }),
+        );
       }
     }
+  }
 
-    this.#updateProgress(pageNumber);
+  #commitBuffers(
+    cssWidth: number,
+    cssHeight: number,
+    nextText: HTMLDivElement | undefined,
+    nextAnnotations: HTMLDivElement | undefined,
+  ): void {
+    const front = this.#domMap.canvas;
+    const back = this.#backCanvas;
+    const backContext = this.#backContext;
+    if (!back || !backContext) {
+      return;
+    }
+
+    front.replaceWith(back);
+    this.#domMap.canvas = back;
+    this.#backCanvas = front;
+    const previousContext = this.#canvasContext;
+    this.#canvasContext = backContext;
+    this.#backContext = previousContext;
+
+    this.#domMap.textLayer.style.width = `${cssWidth}px`;
+    this.#domMap.textLayer.style.height = `${cssHeight}px`;
+    this.#domMap.annotationLayer.style.width = `${cssWidth}px`;
+    this.#domMap.annotationLayer.style.height = `${cssHeight}px`;
+    this.#domMap.textLayer.replaceChildren(...(nextText ? [nextText] : []));
+    this.#domMap.annotationLayer.replaceChildren(...(nextAnnotations ? [nextAnnotations] : []));
   }
 
   #updateProgress(pageNumber: number): void {
@@ -380,6 +513,7 @@ export class PDFJSController {
     page: PDFPageProxy,
     viewport: PDFPageViewport,
     annotationArea: HTMLDivElement,
+    onLayer?: (div: HTMLDivElement) => void,
   ): Promise<void> {
     const annotationLayerBuilder = new AnnotationLayerBuilder({
       pdfPage: page,
@@ -387,7 +521,11 @@ export class PDFJSController {
       renderForms: false,
       imageResourcesPath: "",
       onAppend: (div: HTMLDivElement) => {
-        annotationArea.replaceChildren(div);
+        if (onLayer) {
+          onLayer(div);
+        } else {
+          annotationArea.replaceChildren(div);
+        }
       },
     });
 

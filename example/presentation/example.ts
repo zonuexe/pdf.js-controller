@@ -16,6 +16,7 @@ const controller = new PDFController({
   workerSrc,
   cMapUrl: `${import.meta.env.BASE_URL}cmaps/`,
   cMapPacked: true,
+  doubleBuffer: true,
 });
 
 controller
@@ -32,20 +33,11 @@ function getCornerColor(context: CanvasRenderingContext2D): string {
   return `rgb(${r},${g},${b})`;
 }
 
-container.addEventListener(Events.before_pdf_rendering, () => {
-  const context = controller.canvasContext;
-  const cornerColor = getCornerColor(context);
-  container.style.backgroundColor = cornerColor;
-  document.body.style.backgroundColor = cornerColor;
-  controller.domMapObject.canvas.style.visibility = "hidden";
-});
-
 container.addEventListener(Events.after_pdf_rendering, () => {
   const context = controller.canvasContext;
   const cornerColor = getCornerColor(context);
   container.style.backgroundColor = cornerColor;
   document.body.style.backgroundColor = cornerColor;
-  controller.domMapObject.canvas.style.visibility = "visible";
 });
 
 function initializedEvent(): void {

@@ -11,14 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Exported constructor, DOM, event, and document TypeScript types, plus `pageNumber` / `numPages` / `pdfDocument` getters.
 - `destroy()` to cancel in-flight work and tear down the current PDF document.
+- Optional `doubleBuffer` constructor flag to paint onto a back canvas and swap when the page is ready.
 - GitHub Actions CI for `pnpm check`, `pnpm test`, and `pnpm pack`.
 
 ### Changed
 
 - Development now uses pnpm and the Vite+ toolchain (`vp pack`, `vp dev`, `vp check`).
 - `loadDocument` accepts a `URL`, replaces a previously loaded document, and clamps the current page into the new page count.
-- Page changes cancel the in-flight render instead of drawing every intermediate page.
+- Page changes render only the latest requested page; in-flight work is cancelled instead of drawing intermediate pages.
+- `before-pdf-rendering` fires at the start of each render attempt, before the visible canvas is resized or cleared, so listeners can sample the currently displayed page.
+- `after-pdf-rendering` always follows the matching `before-pdf-rendering`, including when that attempt is cancelled or superseded.
 - The presentation example and README use `event.key` instead of `keyCode`.
+- The presentation example keeps the previous page visible (`doubleBuffer: true`) instead of hiding the canvas during render.
 
 ### Fixed
 
