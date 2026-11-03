@@ -4,24 +4,15 @@
     "module": "nodenext",
     "declaration": true,
     "sourceMap": true,
-    "outDir": "lib",
+    "outDir": "dist",
     "rootDir": "src",
     "moduleResolution": "nodenext",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": false,
     "strict": true,
-    "lib": [
-      "dom",
-      "es2023"
-    ]
+    "lib": ["dom", "es2023"]
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "build",
-    "lib"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "example"]
 }

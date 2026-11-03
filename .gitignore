@@ -1,10 +1,7 @@
-/example/presentation/build.js
-/example/presentation/pdf.worker.mjs
-/example/presentation/pdf.worker.mjs.map
-/example/presentation/cmaps/
+/dist
 /lib
-/build/*
-!/build/.gitkeep
+/build
+/example/presentation/dist
 ### https://raw.github.com/github/gitignore/608690d6b9a78c2a003affc792e49a84905b3118/Node.gitignore
 
 # Logs

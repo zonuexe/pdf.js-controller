@@ -1,70 +1,59 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
+  <head>
+    <meta charset="UTF-8" />
     <title>Presentation</title>
-    <link rel="stylesheet" href="./node_modules/pdfjs-dist/web/pdf_viewer.css">
-    <link rel="stylesheet" href="./node_modules/@zonuexe/pdf.js-controller/css/pdf-slide.css">
     <style>
-        .controls {
-            position: absolute;
-            bottom: 1em;
-            right: 1em;
-        }
+      .controls {
+        position: absolute;
+        bottom: 1em;
+        right: 1em;
+      }
 
-        .controls .arrow {
-            width: 0;
-            height: 0;
-            border: 2em solid #71E9F4;
-            float: left;
-            margin-right: 1em;
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            user-select: none;
-        }
+      .controls .arrow {
+        width: 0;
+        height: 0;
+        border: 2em solid #71e9f4;
+        float: left;
+        margin-right: 1em;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+      }
 
-        .controls .prev {
-            border-top-color: transparent;
-            border-right-width: 50px;
-            border-bottom-color: transparent;
-            border-left: 0 transparent;
-        }
+      .controls .prev {
+        border-top-color: transparent;
+        border-right-width: 50px;
+        border-bottom-color: transparent;
+        border-left: 0 transparent;
+      }
 
-        .controls .next {
-            border-top-color: transparent;
-            border-right: 0 transparent;
-            border-bottom-color: transparent;
-            border-left-width: 50px;
-        }
+      .controls .next {
+        border-top-color: transparent;
+        border-right: 0 transparent;
+        border-bottom-color: transparent;
+        border-left-width: 50px;
+      }
 
-        .controls .prev:hover {
-            border-right-color: #13DAEC;
-            cursor: pointer;
-        }
+      .controls .prev:hover {
+        border-right-color: #13daec;
+        cursor: pointer;
+      }
 
-        .controls .next:hover {
-            border-left-color: #13DAEC;
-            cursor: pointer;
-        }
+      .controls .next:hover {
+        border-left-color: #13daec;
+        cursor: pointer;
+      }
     </style>
-</head>
-<body>
-<div id="pdf-container" class="pdf-page"></div>
-<div class="controls">
-    <div id="js-prev" class="arrow prev"></div>
-    <div id="js-next" class="arrow next"></div>
-</div>
-<script type="importmap">
-{
-  "imports": {
-    "@zonuexe/pdf.js-controller": "./vendor/pdfjs-controller.js",
-    "pdfjs-dist": "./node_modules/pdfjs-dist/build/pdf.mjs",
-    "pdfjs-dist/web/pdf_viewer.mjs": "./node_modules/pdfjs-dist/web/pdf_viewer.mjs"
-  }
-}
-</script>
-<script type="module" src="./build.js" defer></script>
-</body>
+  </head>
+  <body>
+    <div id="pdf-container" class="pdf-page"></div>
+    <div class="controls">
+      <div id="js-prev" class="arrow prev"></div>
+      <div id="js-next" class="arrow next"></div>
+    </div>
+    <script type="module" src="./example.js"></script>
+  </body>
 </html>

@@ -1,21 +1,18 @@
 {
-  "private": true,
   "name": "presentation",
   "version": "1.0.0",
+  "private": true,
   "description": "",
-  "main": "example.js",
-  "scripts": {
-    "start": "npm run build && serve -l 9080",
-    "build": "esbuild example.js --bundle --format=esm --platform=browser --external:@zonuexe/pdf.js-controller --external:pdfjs-dist --external:pdfjs-dist/* --outfile=build.js && node copy-assets.js"
-  },
-  "author": "azu",
   "license": "MIT",
-  "devDependencies": {
-    "esbuild": "^0.28.2",
-    "serve": "^14.2.6"
+  "author": "azu",
+  "type": "module",
+  "scripts": {
+    "start": "vp dev",
+    "build": "vp build",
+    "preview": "vp preview"
   },
   "dependencies": {
-    "@zonuexe/pdf.js-controller": "../../",
+    "@zonuexe/pdf.js-controller": "*",
     "pdfjs-dist": "^6.5.438"
   }
 }

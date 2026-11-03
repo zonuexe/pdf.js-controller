@@ -1,9 +1,20 @@
 {
   "name": "@zonuexe/pdf.js-controller",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/zonuexe/pdf.js-controller.git"
+  "version": "2.0.0",
+  "description": "provide controller and text layer for pdf.js",
+  "keywords": [
+    "pdf",
+    "pdf.js",
+    "presentation",
+    "selection",
+    "slide",
+    "text"
+  ],
+  "homepage": "https://github.com/zonuexe/pdf.js-controller",
+  "bugs": {
+    "url": "https://github.com/zonuexe/pdf.js-controller/issues"
   },
+  "license": "MIT",
   "author": "azu",
   "maintainers": [
     {
@@ -20,48 +31,51 @@
       "name": "zonuexe"
     }
   ],
-  "homepage": "https://github.com/zonuexe/pdf.js-controller",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/zonuexe/pdf.js-controller/issues"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zonuexe/pdf.js-controller.git"
   },
-  "version": "2.0.0",
-  "description": "provide controller and text layer for pdf.js",
-  "type": "module",
-  "main": "./lib/PDFJSController.js",
-  "types": "./lib/PDFJSController.d.ts",
-  "files": [
-    "build",
-    "css",
-    "lib",
-    "src"
-  ],
   "directories": {
     "test": "test"
+  },
+  "workspaces": [
+    "example/presentation"
+  ],
+  "files": [
+    "css",
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/PDFJSController.mjs",
+  "types": "./dist/PDFJSController.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/PDFJSController.d.mts",
+      "import": "./dist/PDFJSController.mjs"
+    },
+    "./css/pdf-slide.css": "./css/pdf-slide.css",
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "npm run compile && npm run bundle",
-    "bundle": "esbuild src/browser-entry.ts --bundle --format=esm --platform=browser --external:pdfjs-dist --external:pdfjs-dist/* --outfile=build/PDFJSController.js",
-    "compile": "tsc -p tsconfig.json",
-    "watch": "tsc -w -p tsconfig.json",
-    "prepublish": "npm run --if-present build"
-  },
-  "keywords": [
-    "pdf",
-    "pdf.js",
-    "text",
-    "selection",
-    "presentation",
-    "slide"
-  ],
-  "devDependencies": {
-    "esbuild": "^0.28.2",
-    "typescript": "^7.0.2"
+    "build": "vp pack",
+    "check": "vp check",
+    "dev": "vp dev",
+    "start": "vp dev",
+    "watch": "vp pack --watch",
+    "prepublishOnly": "vp pack"
   },
   "dependencies": {
     "pdfjs-dist": "^6.5.438"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vite-plus": "1.4.0"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0"
   }
 }
