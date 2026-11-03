@@ -43,7 +43,9 @@
   ],
   "files": [
     "css",
-    "dist"
+    "dist/PDFJSController.mjs",
+    "dist/PDFJSController.mjs.map",
+    "dist/PDFJSController.d.mts"
   ],
   "type": "module",
   "main": "./dist/PDFJSController.mjs",
@@ -65,7 +67,7 @@
     "dev": "vp dev",
     "start": "vp dev",
     "watch": "vp pack --watch",
-    "prepublishOnly": "vp pack"
+    "prepack": "vp pack"
   },
   "dependencies": {
     "pdfjs-dist": "^6.5.438"

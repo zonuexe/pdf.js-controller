@@ -1,4 +1,27 @@
+import fs from "node:fs";
+import path from "node:path";
 import { defineConfig } from "vite-plus";
+
+function stripDeclarationMaps(outDir: string): void {
+  if (!fs.existsSync(outDir)) {
+    return;
+  }
+  for (const name of fs.readdirSync(outDir)) {
+    const file = path.join(outDir, name);
+    if (name.endsWith(".d.ts.map") || name.endsWith(".d.mts.map")) {
+      fs.unlinkSync(file);
+      continue;
+    }
+    if (!name.endsWith(".d.ts") && !name.endsWith(".d.mts")) {
+      continue;
+    }
+    const text = fs.readFileSync(file, "utf8");
+    const next = text.replace(/\n\/\/# sourceMappingURL=.*\n?$/u, "\n");
+    if (next !== text) {
+      fs.writeFileSync(file, next);
+    }
+  }
+}
 
 export default defineConfig({
   defaultPackage: {
@@ -11,6 +34,11 @@ export default defineConfig({
     },
     dts: true,
     sourcemap: true,
+    // Declaration maps point at unpublished src/, and top-level sourcemap: true
+    // still writes a dangling sourceMappingURL into the .d.mts.
+    onSuccess() {
+      stripDeclarationMaps("dist");
+    },
   },
   fmt: {},
   lint: {
