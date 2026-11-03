@@ -41,6 +41,10 @@ export default defineConfig({
     },
   },
   fmt: {},
+  test: {
+    include: ["src/**/*.test.ts"],
+    environment: "happy-dom",
+  },
   lint: {
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: { "vite-plus/prefer-vite-plus-imports": "error" },

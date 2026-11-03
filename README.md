@@ -90,6 +90,7 @@ pnpm install
 pnpm build   # vp pack
 pnpm start   # example on http://localhost:9080
 pnpm check   # format, lint, type-check
+pnpm test
 ```
 
 ## Contributing
