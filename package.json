@@ -35,9 +35,6 @@
     "type": "git",
     "url": "git+https://github.com/zonuexe/pdf.js-controller.git"
   },
-  "directories": {
-    "test": "test"
-  },
   "files": [
     "css",
     "dist/PDFJSController.mjs",
