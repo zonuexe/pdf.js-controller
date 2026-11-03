@@ -36,6 +36,7 @@
     "url": "git+https://github.com/zonuexe/pdf.js-controller.git"
   },
   "files": [
+    "CHANGELOG.md",
     "css",
     "dist/PDFJSController.mjs",
     "dist/PDFJSController.mjs.map",
