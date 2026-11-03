@@ -1,7 +1,5 @@
 // LICENSE : MIT
 
-import domMap from "./dom-map.js";
-
 import * as pdfjsLib from "pdfjs-dist";
 import {
   AnnotationLayerBuilder,
@@ -17,15 +15,25 @@ import type {
   RenderTask,
 } from "pdfjs-dist";
 
+export type { PDFDocumentProxy };
+
 // pdfjs-dist v6 exposes these option/parameter types only via deep, non-exported
 // paths that Node16/NodeNext module resolution can't reach, so derive them from
 // the public runtime API surface instead.
-type DocumentInitParameters = NonNullable<Parameters<typeof pdfjsLib.getDocument>[0]>;
+export type DocumentInitParameters = NonNullable<Parameters<typeof pdfjsLib.getDocument>[0]>;
 type RenderParameters = Parameters<PDFPageProxy["render"]>[0];
 type TextLayerBuilderRenderOptions = Parameters<TextLayerBuilder["render"]>[0];
 type AnnotationLayerBuilderRenderOptions = Parameters<AnnotationLayerBuilder["render"]>[0];
 
-interface PDFJSControllerOptions {
+export const Events = {
+  before_pdf_rendering: "before-pdf-rendering",
+  after_pdf_rendering: "after-pdf-rendering",
+} as const;
+
+export type PDFJSControllerEventName = (typeof Events)[keyof typeof Events];
+export type PDFJSControllerDocumentSource = string | URL | DocumentInitParameters;
+
+export interface PDFJSControllerOptions {
   container: HTMLElement;
   innerHTML?: string;
   pageNumber?: number;
@@ -35,13 +43,13 @@ interface PDFJSControllerOptions {
   cMapPacked?: boolean;
 }
 
-type ControllerDomMap = {
+export interface PDFJSControllerDomMap {
   readonly progressBar: HTMLElement | null;
   readonly canvas: HTMLCanvasElement;
   readonly textLayer: HTMLDivElement;
   readonly annotationLayer: HTMLDivElement;
   readonly loading: HTMLElement;
-};
+}
 
 const defaultInnerHTML = `<div class="pdf-slide-progress">
     <div class="pdf-slide-progress-bar"></div>
@@ -57,17 +65,38 @@ const parseTemplate = (markup: string): DocumentFragment => {
   return template.content;
 };
 
-class PDFJSController {
-  private readonly pdfContainer: HTMLElement;
-  private pdfDoc: PDFDocumentProxy | null = null;
-  private pageNum: number;
-  private promiseQueue: Promise<void> = Promise.resolve();
-  private readonly domMapObject: ControllerDomMap;
-  private readonly canvasContext: CanvasRenderingContext2D;
-  private readonly eventBus = new EventBus();
-  private readonly linkService = new SimpleLinkService({ eventBus: this.eventBus });
-  private readonly cMapUrl?: string;
-  private readonly cMapPacked?: boolean;
+const requireElement = <T extends Element>(
+  root: ParentNode,
+  selector: string,
+  elementType: abstract new (...args: never[]) => T,
+  label: string,
+): T => {
+  const element = root.querySelector(selector);
+  if (!(element instanceof elementType)) {
+    throw new Error(`Missing required ${label} element (${selector}).`);
+  }
+  return element;
+};
+
+const optionalHTMLElement = (root: ParentNode, selector: string): HTMLElement | null => {
+  const element = root.querySelector(selector);
+  return element instanceof HTMLElement ? element : null;
+};
+
+export class PDFJSController {
+  static readonly Events = Events;
+
+  readonly canvasContext: CanvasRenderingContext2D;
+  readonly domMapObject: PDFJSControllerDomMap;
+
+  #pdfContainer: HTMLElement;
+  #pdfDoc: PDFDocumentProxy | null = null;
+  #pageNum: number;
+  #promiseQueue: Promise<void> = Promise.resolve();
+  #eventBus = new EventBus();
+  #linkService = new SimpleLinkService({ eventBus: this.#eventBus });
+  #cMapUrl?: string;
+  #cMapPacked?: boolean;
 
   constructor({
     container,
@@ -78,18 +107,18 @@ class PDFJSController {
     cMapUrl,
     cMapPacked,
   }: PDFJSControllerOptions) {
-    this.pdfContainer = container;
-    this.pageNum = pageNumber ?? 1;
+    this.#pdfContainer = container;
+    this.#pageNum = pageNumber ?? 1;
 
     let resolvedWorkerSrc = workerSrc;
     if (pdfjsDistDir && !resolvedWorkerSrc) {
       const baseDir = pdfjsDistDir.replace(/\/$/, "");
       resolvedWorkerSrc = `${baseDir}/build/pdf.worker.mjs`;
-      this.cMapUrl = `${baseDir}/cmaps/`;
-      this.cMapPacked = true;
+      this.#cMapUrl = `${baseDir}/cmaps/`;
+      this.#cMapPacked = true;
     } else {
-      this.cMapUrl = cMapUrl;
-      this.cMapPacked = cMapPacked;
+      this.#cMapUrl = cMapUrl;
+      this.#cMapPacked = cMapPacked;
     }
     if (resolvedWorkerSrc) {
       pdfjsLib.GlobalWorkerOptions.workerSrc = resolvedWorkerSrc;
@@ -97,15 +126,13 @@ class PDFJSController {
 
     const html = innerHTML ?? defaultInnerHTML;
     const dom = parseTemplate(html);
-    const mapping = {
-      progressBar: ".pdf-slide-progress-bar",
-      canvas: ".pdf-canvas",
-      textLayer: ".textLayer",
-      annotationLayer: ".annotationLayer",
-      loading: ".pdf-loading",
-    } as const;
-
-    this.domMapObject = domMap<typeof mapping, ControllerDomMap>(dom, mapping);
+    this.domMapObject = {
+      progressBar: optionalHTMLElement(dom, ".pdf-slide-progress-bar"),
+      canvas: requireElement(dom, ".pdf-canvas", HTMLCanvasElement, "canvas"),
+      textLayer: requireElement(dom, ".textLayer", HTMLDivElement, "text layer"),
+      annotationLayer: requireElement(dom, ".annotationLayer", HTMLDivElement, "annotation layer"),
+      loading: requireElement(dom, ".pdf-loading", HTMLElement, "loading"),
+    } satisfies PDFJSControllerDomMap;
     container.appendChild(dom);
 
     const canvasContext = this.domMapObject.canvas.getContext("2d", {
@@ -119,106 +146,109 @@ class PDFJSController {
     void this.fitItSize();
   }
 
-  static get Events(): Record<"before_pdf_rendering" | "after_pdf_rendering", string> {
-    return {
-      before_pdf_rendering: "before-pdf-rendering",
-      after_pdf_rendering: "after_pdf_rendering",
-    };
+  get pageNumber(): number {
+    return this.#pageNum;
   }
 
-  async loadDocument(source: string | DocumentInitParameters): Promise<void> {
-    const events = PDFJSController.Events;
+  get numPages(): number {
+    return this.#pdfDoc?.numPages ?? 0;
+  }
+
+  get pdfDocument(): PDFDocumentProxy | null {
+    return this.#pdfDoc;
+  }
+
+  async loadDocument(source: PDFJSControllerDocumentSource): Promise<void> {
     const hideLoadingIcon = (): void => {
       this.domMapObject.loading.style.display = "none";
     };
 
-    this.pdfContainer.addEventListener(events.before_pdf_rendering, hideLoadingIcon);
+    this.#pdfContainer.addEventListener(Events.before_pdf_rendering, hideLoadingIcon);
 
     try {
       const params: DocumentInitParameters =
-        typeof source === "string" ? { url: source } : { ...source };
-      if (this.cMapUrl && !params.cMapUrl) {
-        params.cMapUrl = this.cMapUrl;
-        params.cMapPacked = this.cMapPacked ?? true;
+        typeof source === "string" || source instanceof URL ? { url: source } : { ...source };
+      if (this.#cMapUrl && !params.cMapUrl) {
+        params.cMapUrl = this.#cMapUrl;
+        params.cMapPacked = this.#cMapPacked ?? true;
       } else if (
         params.cMapUrl &&
         params.cMapPacked === undefined &&
-        this.cMapPacked !== undefined
+        this.#cMapPacked !== undefined
       ) {
-        params.cMapPacked = this.cMapPacked;
+        params.cMapPacked = this.#cMapPacked;
       }
 
       const loadingTask: PDFDocumentLoadingTask = pdfjsLib.getDocument(params);
-      this.pdfDoc = await loadingTask.promise;
-      this.linkService.setDocument(this.pdfDoc);
-      await this.queueRenderPage(this.pageNum);
+      this.#pdfDoc = await loadingTask.promise;
+      this.#linkService.setDocument(this.#pdfDoc);
+      await this.#queueRenderPage(this.#pageNum);
     } finally {
-      this.pdfContainer.removeEventListener(events.before_pdf_rendering, hideLoadingIcon);
+      this.#pdfContainer.removeEventListener(Events.before_pdf_rendering, hideLoadingIcon);
     }
   }
 
   async fitItSize(): Promise<void> {
-    const containerRect = this.pdfContainer.getBoundingClientRect();
+    const containerRect = this.#pdfContainer.getBoundingClientRect();
     this.domMapObject.canvas.width = containerRect.width;
     this.domMapObject.canvas.height = containerRect.height;
-    await this.queueRenderPage(this.pageNum);
+    await this.#queueRenderPage(this.#pageNum);
   }
 
   async prevPage(): Promise<void> {
-    if (this.pageNum <= 1) {
+    if (this.#pageNum <= 1) {
       return;
     }
-    this.pageNum -= 1;
-    await this.queueRenderPage(this.pageNum);
+    this.#pageNum -= 1;
+    await this.#queueRenderPage(this.#pageNum);
   }
 
   async nextPage(): Promise<void> {
-    if (!this.pdfDoc || this.pageNum >= this.pdfDoc.numPages) {
+    if (!this.#pdfDoc || this.#pageNum >= this.#pdfDoc.numPages) {
       return;
     }
-    this.pageNum += 1;
-    await this.queueRenderPage(this.pageNum);
+    this.#pageNum += 1;
+    await this.#queueRenderPage(this.#pageNum);
   }
 
-  private queueRenderPage(pageNumber: number): Promise<void> {
-    if (!this.pdfDoc) {
+  #queueRenderPage(pageNumber: number): Promise<void> {
+    if (!this.#pdfDoc) {
       return Promise.resolve();
     }
 
-    this.promiseQueue = this.promiseQueue
-      .then(() => this.renderPage(pageNumber))
-      .catch((error) => {
-        this.promiseQueue = Promise.resolve();
+    this.#promiseQueue = this.#promiseQueue
+      .then(() => this.#renderPage(pageNumber))
+      .catch((error: unknown) => {
+        this.#promiseQueue = Promise.resolve();
         throw error;
       });
 
-    return this.promiseQueue;
+    return this.#promiseQueue;
   }
 
-  private cleanup(): void {
+  #cleanup(): void {
     this.domMapObject.textLayer.replaceChildren();
     this.domMapObject.annotationLayer.replaceChildren();
   }
 
-  private async renderPage(pageNumber: number): Promise<void> {
-    if (!this.pdfDoc) {
+  async #renderPage(pageNumber: number): Promise<void> {
+    if (!this.#pdfDoc) {
       return;
     }
 
-    const events = PDFJSController.Events;
-    const beforeEvent = new CustomEvent(events.before_pdf_rendering, { detail: this });
-    this.pdfContainer.dispatchEvent(beforeEvent);
+    const beforeEvent = new CustomEvent(Events.before_pdf_rendering, { detail: this });
+    this.#pdfContainer.dispatchEvent(beforeEvent);
 
     try {
-      const page = await this.pdfDoc.getPage(pageNumber);
-      this.cleanup();
+      const page = await this.#pdfDoc.getPage(pageNumber);
+      this.#cleanup();
 
       const { canvas, textLayer, annotationLayer } = this.domMapObject;
       const initialViewport = page.getViewport({ scale: 1 });
-      const containerRect = this.pdfContainer.getBoundingClientRect();
+      const containerRect = this.#pdfContainer.getBoundingClientRect();
       let cssWidth = containerRect.width;
       if (!cssWidth || !Number.isFinite(cssWidth)) {
-        cssWidth = this.domMapObject.canvas.clientWidth || initialViewport.width;
+        cssWidth = canvas.clientWidth || initialViewport.width;
       }
       const scale = cssWidth / initialViewport.width;
       const viewport = page.getViewport({ scale });
@@ -255,43 +285,44 @@ class PDFJSController {
         },
       });
 
-      // `images` powers pdf.js's right-click image-extraction feature, which this
-      // controller does not use; pdf.js's own viewer passes null in the same case.
-      const textLayerRenderOptions: TextLayerBuilderRenderOptions = {
-        viewport,
-        images: null as unknown as TextLayerBuilderRenderOptions["images"],
-      };
+      // pdf.js types `images` as TextLayerImages, but the viewer itself passes
+      // null when right-click image extraction is unused.
+      await Promise.all([
+        renderTask.promise,
+        textLayerBuilder.render({
+          viewport,
+          images: null,
+        } as unknown as TextLayerBuilderRenderOptions),
+      ]);
 
-      await Promise.all([renderTask.promise, textLayerBuilder.render(textLayerRenderOptions)]);
-
-      await this.setupAnnotations(page, viewport, annotationLayer);
+      await this.#setupAnnotations(page, viewport, annotationLayer);
     } finally {
-      const afterEvent = new CustomEvent(events.after_pdf_rendering, { detail: this });
-      this.pdfContainer.dispatchEvent(afterEvent);
+      const afterEvent = new CustomEvent(Events.after_pdf_rendering, { detail: this });
+      this.#pdfContainer.dispatchEvent(afterEvent);
     }
 
-    this.updateProgress(pageNumber);
+    this.#updateProgress(pageNumber);
   }
 
-  private updateProgress(pageNumber: number): void {
+  #updateProgress(pageNumber: number): void {
     const progressBar = this.domMapObject.progressBar;
-    if (!progressBar || !this.pdfDoc) {
+    if (!progressBar || !this.#pdfDoc) {
       return;
     }
-    const numSlides = this.pdfDoc.numPages;
+    const numSlides = this.#pdfDoc.numPages;
     const position = pageNumber - 1;
     const percent = numSlides === 1 ? 100 : (100 * position) / (numSlides - 1);
     progressBar.style.width = `${percent}%`;
   }
 
-  private async setupAnnotations(
+  async #setupAnnotations(
     page: PDFPageProxy,
     viewport: PDFPageViewport,
     annotationArea: HTMLDivElement,
   ): Promise<void> {
     const annotationLayerBuilder = new AnnotationLayerBuilder({
       pdfPage: page,
-      linkService: this.linkService,
+      linkService: this.#linkService,
       renderForms: false,
       imageResourcesPath: "",
       onAppend: (div: HTMLDivElement) => {
@@ -305,6 +336,15 @@ class PDFJSController {
     };
 
     await annotationLayerBuilder.render(annotationRenderOptions);
+  }
+}
+
+export type PDFJSControllerEvent = CustomEvent<PDFJSController>;
+
+declare global {
+  interface HTMLElementEventMap {
+    [Events.before_pdf_rendering]: CustomEvent<PDFJSController>;
+    [Events.after_pdf_rendering]: CustomEvent<PDFJSController>;
   }
 }
 

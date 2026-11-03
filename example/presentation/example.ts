@@ -2,7 +2,7 @@
 
 import "pdfjs-dist/web/pdf_viewer.css";
 import "@zonuexe/pdf.js-controller/css/pdf-slide.css";
-import PDFController from "@zonuexe/pdf.js-controller";
+import PDFController, { Events } from "@zonuexe/pdf.js-controller";
 import workerSrc from "pdfjs-dist/build/pdf.worker.mjs?url";
 import pdfUrl from "./example.pdf?url";
 
@@ -21,18 +21,18 @@ const controller = new PDFController({
 controller
   .loadDocument(pdfUrl)
   .then(initializedEvent)
-  .catch((error) => {
+  .catch((error: unknown) => {
     console.error(error);
   });
 
-function getCornerColor(context) {
+function getCornerColor(context: CanvasRenderingContext2D): string {
   const canvasColor = context.getImageData(0, 0, 1, 1);
   const pixels = canvasColor.data;
   const [r, g, b] = pixels;
   return `rgb(${r},${g},${b})`;
 }
 
-container.addEventListener(PDFController.Events.before_pdf_rendering, () => {
+container.addEventListener(Events.before_pdf_rendering, () => {
   const context = controller.canvasContext;
   const cornerColor = getCornerColor(context);
   container.style.backgroundColor = cornerColor;
@@ -40,7 +40,7 @@ container.addEventListener(PDFController.Events.before_pdf_rendering, () => {
   controller.domMapObject.canvas.style.visibility = "hidden";
 });
 
-container.addEventListener(PDFController.Events.after_pdf_rendering, () => {
+container.addEventListener(Events.after_pdf_rendering, () => {
   const context = controller.canvasContext;
   const cornerColor = getCornerColor(context);
   container.style.backgroundColor = cornerColor;
@@ -48,19 +48,15 @@ container.addEventListener(PDFController.Events.after_pdf_rendering, () => {
   controller.domMapObject.canvas.style.visibility = "visible";
 });
 
-function initializedEvent() {
-  document
-    .getElementById("js-prev")
-    ?.addEventListener("click", controller.prevPage.bind(controller));
-  document
-    .getElementById("js-next")
-    ?.addEventListener("click", controller.nextPage.bind(controller));
+function initializedEvent(): void {
+  document.getElementById("js-prev")?.addEventListener("click", () => void controller.prevPage());
+  document.getElementById("js-next")?.addEventListener("click", () => void controller.nextPage());
 
   window.addEventListener("resize", () => {
     void controller.fitItSize();
   });
 
-  document.addEventListener("keydown", (event) => {
+  document.addEventListener("keydown", (event: KeyboardEvent) => {
     if (event.shiftKey || event.ctrlKey || event.metaKey) {
       return;
     }
