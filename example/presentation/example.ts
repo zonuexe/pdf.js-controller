@@ -60,11 +60,11 @@ function initializedEvent(): void {
     if (event.shiftKey || event.ctrlKey || event.metaKey) {
       return;
     }
-    const kc = event.keyCode;
-    if (kc === 37 || kc === 40 || kc === 75 || kc === 65) {
+    const { key } = event;
+    if (key === "ArrowLeft" || key === "ArrowDown" || key === "k" || key === "a") {
       event.preventDefault();
       void controller.prevPage();
-    } else if (kc === 38 || kc === 39 || kc === 74 || kc === 83) {
+    } else if (key === "ArrowUp" || key === "ArrowRight" || key === "j" || key === "s") {
       event.preventDefault();
       void controller.nextPage();
     }

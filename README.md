@@ -1,6 +1,6 @@
 # pdf.js-controller
 
-This library provide programming friendly usage of [mozilla/pdf.js](https://github.com/mozilla/pdf.js "mozilla/pdf.js").
+This library provides a programming-friendly API for [mozilla/pdf.js](https://github.com/mozilla/pdf.js "mozilla/pdf.js").
 
 - Load pdf and show page
 - Display pdf as like presentation
@@ -34,7 +34,7 @@ Place `pdf.worker.mjs` and the `cmaps/` directory where the page can fetch them,
 See [example/presentation](example/presentation)
 
 ```js
-import PDFController from "@zonuexe/pdf.js-controller";
+import PDFController, { Events } from "@zonuexe/pdf.js-controller";
 
 const container = document.getElementById("pdf-container");
 if (!container) throw new Error("Missing #pdf-container");
@@ -51,10 +51,10 @@ const pdfUrl = new URL("./example.pdf", import.meta.url).toString();
 controller
   .loadDocument(pdfUrl)
   .then(() => {
-    container.addEventListener(PDFController.Events.before_pdf_rendering, () => {
+    container.addEventListener(Events.before_pdf_rendering, () => {
       // before render
     });
-    container.addEventListener(PDFController.Events.after_pdf_rendering, () => {
+    container.addEventListener(Events.after_pdf_rendering, () => {
       // after render
     });
 
@@ -66,11 +66,11 @@ controller
       if (event.shiftKey || event.ctrlKey || event.metaKey) {
         return;
       }
-      const kc = event.keyCode;
-      if (kc === 37 || kc === 40 || kc === 75 || kc === 65) {
+      const { key } = event;
+      if (key === "ArrowLeft" || key === "ArrowDown" || key === "k" || key === "a") {
         event.preventDefault();
         void controller.prevPage();
-      } else if (kc === 38 || kc === 39 || kc === 74 || kc === 83) {
+      } else if (key === "ArrowUp" || key === "ArrowRight" || key === "j" || key === "s") {
         event.preventDefault();
         void controller.nextPage();
       }
@@ -81,7 +81,7 @@ controller
   });
 ```
 
-Call `controller.destroy()` when the viewer is removed from the page.
+Named exports include `Events`, `PDFJSController`, and the option/DOM/event types. Call `controller.destroy()` when the viewer is removed from the page.
 
 ## Development
 
