@@ -29,6 +29,7 @@ type AnnotationLayerBuilderRenderOptions = Parameters<AnnotationLayerBuilder["re
 export const Events = {
   before_pdf_rendering: "before-pdf-rendering",
   after_pdf_rendering: "after-pdf-rendering",
+  page_rendered: "pdf-page-rendered",
 } as const;
 
 export type PDFJSControllerEventName = (typeof Events)[keyof typeof Events];
@@ -47,6 +48,11 @@ export interface PDFJSControllerOptions {
    * The previously displayed page stays visible during fast page changes.
    */
   doubleBuffer?: boolean;
+  /**
+   * Request a CPU-readable 2D context. Pass true when the host calls
+   * `getImageData` (or similar) on `canvasContext`.
+   */
+  willReadFrequently?: boolean;
 }
 
 export interface PDFJSControllerDomMap {
@@ -89,10 +95,11 @@ const optionalHTMLElement = (root: ParentNode, selector: string): HTMLElement | 
   return element instanceof HTMLElement ? element : null;
 };
 
-const require2dContext = (canvas: HTMLCanvasElement): CanvasRenderingContext2D => {
-  const context = canvas.getContext("2d", {
-    willReadFrequently: true,
-  });
+const require2dContext = (
+  canvas: HTMLCanvasElement,
+  willReadFrequently: boolean,
+): CanvasRenderingContext2D => {
+  const context = canvas.getContext("2d", { willReadFrequently });
   if (!context) {
     throw new Error("Unable to obtain a 2D canvas context.");
   }
@@ -138,6 +145,7 @@ export class PDFJSController {
     cMapUrl,
     cMapPacked,
     doubleBuffer = false,
+    willReadFrequently = false,
   }: PDFJSControllerOptions) {
     this.#pdfContainer = container;
     this.#pageNum = pageNumber ?? 1;
@@ -169,11 +177,11 @@ export class PDFJSController {
     container.appendChild(dom);
 
     this.#doubleBuffer = doubleBuffer;
-    this.#canvasContext = require2dContext(this.#domMap.canvas);
+    this.#canvasContext = require2dContext(this.#domMap.canvas, willReadFrequently);
     if (this.#doubleBuffer) {
       this.#backCanvas = document.createElement("canvas");
       this.#backCanvas.className = this.#domMap.canvas.className;
-      this.#backContext = require2dContext(this.#backCanvas);
+      this.#backContext = require2dContext(this.#backCanvas, willReadFrequently);
     }
 
     void this.fitItSize();
@@ -456,6 +464,7 @@ export class PDFJSController {
       }
 
       this.#updateProgress(pageNumber);
+      this.#pdfContainer.dispatchEvent(new CustomEvent(Events.page_rendered, { detail: this }));
     } catch (error: unknown) {
       if (error instanceof RenderingCancelledException) {
         return;
@@ -544,6 +553,7 @@ declare global {
   interface HTMLElementEventMap {
     [Events.before_pdf_rendering]: CustomEvent<PDFJSController>;
     [Events.after_pdf_rendering]: CustomEvent<PDFJSController>;
+    [Events.page_rendered]: CustomEvent<PDFJSController>;
   }
 }
 

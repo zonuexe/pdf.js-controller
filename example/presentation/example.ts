@@ -17,6 +17,7 @@ const controller = new PDFController({
   cMapUrl: `${import.meta.env.BASE_URL}cmaps/`,
   cMapPacked: true,
   doubleBuffer: true,
+  willReadFrequently: true,
 });
 
 controller
@@ -33,7 +34,7 @@ function getCornerColor(context: CanvasRenderingContext2D): string {
   return `rgb(${r},${g},${b})`;
 }
 
-container.addEventListener(Events.after_pdf_rendering, () => {
+container.addEventListener(Events.page_rendered, () => {
   const context = controller.canvasContext;
   const cornerColor = getCornerColor(context);
   container.style.backgroundColor = cornerColor;

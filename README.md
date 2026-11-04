@@ -45,6 +45,7 @@ const controller = new PDFController({
   cMapUrl: new URL("./cmaps/", import.meta.url).toString(),
   cMapPacked: true,
   doubleBuffer: true,
+  willReadFrequently: true,
 });
 
 const pdfUrl = new URL("./example.pdf", import.meta.url).toString();
@@ -53,10 +54,13 @@ controller
   .loadDocument(pdfUrl)
   .then(() => {
     container.addEventListener(Events.before_pdf_rendering, () => {
-      // before render
+      // each render attempt started
     });
     container.addEventListener(Events.after_pdf_rendering, () => {
-      // after render
+      // that attempt finished (including cancelled work)
+    });
+    container.addEventListener(Events.page_rendered, () => {
+      // the new page is on screen
     });
 
     window.addEventListener("resize", () => {
@@ -84,7 +88,7 @@ controller
 
 Named exports include `Events`, `PDFJSController`, and the option/DOM/event types. Call `controller.destroy()` when the viewer is removed from the page.
 
-`doubleBuffer: true` keeps the previous page on screen until the next page has finished painting. Read `controller.domMapObject.canvas` and `controller.canvasContext` from event handlers when you need the current surface; a retained canvas element is detached on the next swap. The first page has no previous bitmap, so the surface stays empty until that render commits. Double buffering holds two full-size canvases until `destroy()`. `before-pdf-rendering` / `after-pdf-rendering` are paired per attempt, including cancelled or superseded renders.
+`doubleBuffer: true` keeps the previous page on screen until the next page has finished painting. Read `controller.domMapObject.canvas` and `controller.canvasContext` from event handlers when you need the current surface; a retained canvas element is detached on the next swap. The first page has no previous bitmap, so the surface stays empty until that render commits. Double buffering holds two full-size canvases until `destroy()`. Pass `willReadFrequently: true` when the host reads pixels with `getImageData`. `before-pdf-rendering` / `after-pdf-rendering` are paired per attempt, including cancelled or superseded renders. Listen to `pdf-page-rendered` when the new page is actually on screen.
 
 ## Development
 

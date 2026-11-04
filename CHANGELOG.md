@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Exported constructor, DOM, event, and document TypeScript types, plus `pageNumber` / `numPages` / `pdfDocument` getters.
 - `destroy()` to cancel in-flight work and tear down the current PDF document.
 - Optional `doubleBuffer` constructor flag to paint onto a back canvas and swap when the page is ready.
+- `pdf-page-rendered` when a page is actually painted onto the visible canvas.
+- Optional `willReadFrequently` constructor flag for hosts that call `getImageData` on the canvas.
 - GitHub Actions CI for `pnpm check`, `pnpm test`, and `pnpm pack`.
 
 ### Changed
