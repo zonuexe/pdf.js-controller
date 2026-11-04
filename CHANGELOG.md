@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-04
+
 ### Added
 
 - Exported constructor, DOM, event, and document TypeScript types, plus `pageNumber` / `numPages` / `pdfDocument` getters.
@@ -41,5 +43,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - First 2.x release on npm with an ESM build over pdf.js 6.
 
-[unreleased]: https://github.com/zonuexe/pdf.js-controller/compare/v2.0.0...HEAD
+[unreleased]: https://github.com/zonuexe/pdf.js-controller/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/zonuexe/pdf.js-controller/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/zonuexe/pdf.js-controller/releases/tag/v2.0.0
